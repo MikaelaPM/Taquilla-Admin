@@ -32,6 +32,16 @@ export function LoginScreen({ users, onLogin }: LoginScreenProps) {
     onLogin(selectedUserId)
   }
 
+  const handleUserChange = (userId: string) => {
+    setSelectedUserId(userId)
+    const user = activeUsers.find((u) => u.id === userId)
+    if (user?.password) {
+      setPassword(user.password)
+    } else {
+      setPassword("")
+    }
+  }
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && selectedUserId) {
       handleLogin()
@@ -64,7 +74,7 @@ export function LoginScreen({ users, onLogin }: LoginScreenProps) {
             <>
               <div className="space-y-2">
                 <Label htmlFor="user-select">Seleccione su usuario</Label>
-                <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+                <Select value={selectedUserId} onValueChange={handleUserChange}>
                   <SelectTrigger id="user-select">
                     <SelectValue placeholder="Seleccione un usuario" />
                   </SelectTrigger>
@@ -78,25 +88,17 @@ export function LoginScreen({ users, onLogin }: LoginScreenProps) {
                 </Select>
               </div>
 
-              {selectedUser?.password && (
-                <div className="space-y-2">
-                  <Label htmlFor="password">Contraseña</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    placeholder="Ingrese su contraseña"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    onKeyPress={handleKeyPress}
-                  />
-                </div>
-              )}
-
-              {selectedUser && !selectedUser.password && (
-                <p className="text-xs text-muted-foreground text-center py-2 bg-muted rounded-lg">
-                  Este usuario no requiere contraseña
-                </p>
-              )}
+              <div className="space-y-2">
+                <Label htmlFor="password">Contraseña</Label>
+                <Input
+                  id="password"
+                  type="text"
+                  placeholder="Ingrese su contraseña"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                />
+              </div>
 
               <Button
                 className="w-full"
