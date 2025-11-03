@@ -61,6 +61,12 @@ function App() {
   const [userSearch, setUserSearch] = useState("")
   const [userFilters, setUserFilters] = useState<{ isActive?: boolean; roleId?: string }>({})
   const [roleSearch, setRoleSearch] = useState("")
+  const [winnerSearch, setWinnerSearch] = useState("")
+  const [winnerFilters, setWinnerFilters] = useState<{ lotteryId?: string }>({})
+  const [drawSearch, setDrawSearch] = useState("")
+  const [drawFilters, setDrawFilters] = useState<{ lotteryId?: string }>({})
+  const [transferSearch, setTransferSearch] = useState("")
+  const [withdrawalSearch, setWithdrawalSearch] = useState("")
 
   useEffect(() => {
     const currentRoles = roles || []
@@ -261,6 +267,29 @@ function App() {
   const filteredBets = filterBets(activeBets, betSearch, betFilters)
   const filteredUsers = filterUsers(currentUsers, userSearch, userFilters)
   const filteredRoles = filterRoles(currentRoles, roleSearch)
+  const filteredWinners = filterBets(winners, winnerSearch, winnerFilters)
+  const filteredDraws = currentDraws.filter((draw) => {
+    const matchesSearch =
+      drawSearch === "" ||
+      draw.lotteryName.toLowerCase().includes(drawSearch.toLowerCase()) ||
+      draw.winningAnimalName.toLowerCase().includes(drawSearch.toLowerCase()) ||
+      draw.winningAnimalNumber.toString().includes(drawSearch)
+    const matchesLottery = !drawFilters.lotteryId || draw.lotteryId === drawFilters.lotteryId
+    return matchesSearch && matchesLottery
+  })
+  const filteredTransfers = currentTransfers.filter((transfer) => {
+    return (
+      transferSearch === "" ||
+      transfer.fromPot.toLowerCase().includes(transferSearch.toLowerCase()) ||
+      transfer.toPot.toLowerCase().includes(transferSearch.toLowerCase())
+    )
+  })
+  const filteredWithdrawals = currentWithdrawals.filter((withdrawal) => {
+    return (
+      withdrawalSearch === "" ||
+      withdrawal.fromPot.toLowerCase().includes(withdrawalSearch.toLowerCase())
+    )
+  })
 
   if (!currentUserId || !currentUser) {
     return <LoginScreen users={currentUsers} onLogin={setCurrentUserId} />
@@ -651,13 +680,45 @@ function App() {
                   <CardTitle>Sorteos Realizados</CardTitle>
                   <CardDescription>Historial de sorteos y resultados</CardDescription>
                 </CardHeader>
-                <CardContent>
-                  {currentDraws.length === 0 ? (
-                    <p className="text-center text-muted-foreground py-8">No hay sorteos realizados</p>
+                <CardContent className="space-y-4">
+                  <div className="flex gap-4">
+                    <div className="flex-1 relative">
+                      <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        placeholder="Buscar por lotería o animal..."
+                        value={drawSearch}
+                        onChange={(e) => setDrawSearch(e.target.value)}
+                        className="pl-10"
+                      />
+                    </div>
+                    <Select
+                      value={drawFilters.lotteryId || "all"}
+                      onValueChange={(value) =>
+                        setDrawFilters((f) => ({ ...f, lotteryId: value === "all" ? undefined : value }))
+                      }
+                    >
+                      <SelectTrigger className="w-[200px]">
+                        <SelectValue placeholder="Filtrar por lotería" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todas las loterías</SelectItem>
+                        {currentLotteries.map((lottery) => (
+                          <SelectItem key={lottery.id} value={lottery.id}>
+                            {lottery.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {filteredDraws.length === 0 ? (
+                    <p className="text-center text-muted-foreground py-8">
+                      {currentDraws.length === 0 ? "No hay sorteos realizados" : "No se encontraron sorteos"}
+                    </p>
                   ) : (
                     <ScrollArea className="h-[300px]">
                       <div className="space-y-3">
-                        {currentDraws
+                        {filteredDraws
                           .sort((a, b) => new Date(b.drawTime).getTime() - new Date(a.drawTime).getTime())
                           .map((draw) => (
                             <div
@@ -694,9 +755,41 @@ function App() {
                   <CardTitle>Jugadas Ganadoras</CardTitle>
                   <CardDescription>Todas las jugadas que han ganado premios</CardDescription>
                 </CardHeader>
-                <CardContent>
-                  {winners.length === 0 ? (
-                    <p className="text-center text-muted-foreground py-8">No hay ganadores aún</p>
+                <CardContent className="space-y-4">
+                  <div className="flex gap-4">
+                    <div className="flex-1 relative">
+                      <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        placeholder="Buscar por lotería o animal..."
+                        value={winnerSearch}
+                        onChange={(e) => setWinnerSearch(e.target.value)}
+                        className="pl-10"
+                      />
+                    </div>
+                    <Select
+                      value={winnerFilters.lotteryId || "all"}
+                      onValueChange={(value) =>
+                        setWinnerFilters((f) => ({ ...f, lotteryId: value === "all" ? undefined : value }))
+                      }
+                    >
+                      <SelectTrigger className="w-[200px]">
+                        <SelectValue placeholder="Filtrar por lotería" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todas las loterías</SelectItem>
+                        {currentLotteries.map((lottery) => (
+                          <SelectItem key={lottery.id} value={lottery.id}>
+                            {lottery.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {filteredWinners.length === 0 ? (
+                    <p className="text-center text-muted-foreground py-8">
+                      {winners.length === 0 ? "No hay ganadores aún" : "No se encontraron ganadores"}
+                    </p>
                   ) : (
                     <ScrollArea className="h-[300px]">
                       <Table>
@@ -710,7 +803,7 @@ function App() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {winners
+                          {filteredWinners
                             .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
                             .map((bet) => (
                               <TableRow key={bet.id}>
@@ -749,15 +842,27 @@ function App() {
                 <CardHeader>
                   <CardTitle>Transferencias Entre Potes</CardTitle>
                 </CardHeader>
-                <CardContent>
-                  {currentTransfers.length === 0 ? (
+                <CardContent className="space-y-4">
+                  <div className="relative">
+                    <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      placeholder="Buscar por nombre de pote..."
+                      value={transferSearch}
+                      onChange={(e) => setTransferSearch(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+
+                  {filteredTransfers.length === 0 ? (
                     <p className="text-center text-muted-foreground py-8">
-                      No hay transferencias registradas
+                      {currentTransfers.length === 0
+                        ? "No hay transferencias registradas"
+                        : "No se encontraron transferencias"}
                     </p>
                   ) : (
                     <ScrollArea className="h-[400px]">
                       <div className="space-y-3">
-                        {currentTransfers
+                        {filteredTransfers
                           .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
                           .map((transfer) => (
                             <div key={transfer.id} className="p-3 border rounded-lg space-y-1">
@@ -787,13 +892,27 @@ function App() {
                 <CardHeader>
                   <CardTitle>Retiros de Ganancias</CardTitle>
                 </CardHeader>
-                <CardContent>
-                  {currentWithdrawals.length === 0 ? (
-                    <p className="text-center text-muted-foreground py-8">No hay retiros registrados</p>
+                <CardContent className="space-y-4">
+                  <div className="relative">
+                    <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      placeholder="Buscar por pote..."
+                      value={withdrawalSearch}
+                      onChange={(e) => setWithdrawalSearch(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+
+                  {filteredWithdrawals.length === 0 ? (
+                    <p className="text-center text-muted-foreground py-8">
+                      {currentWithdrawals.length === 0
+                        ? "No hay retiros registrados"
+                        : "No se encontraron retiros"}
+                    </p>
                   ) : (
                     <ScrollArea className="h-[400px]">
                       <div className="space-y-3">
-                        {currentWithdrawals
+                        {filteredWithdrawals
                           .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
                           .map((withdrawal) => (
                             <div key={withdrawal.id} className="p-3 border rounded-lg space-y-1">
