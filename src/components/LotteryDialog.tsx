@@ -18,13 +18,15 @@ interface LotteryDialogProps {
 
 export function LotteryDialog({ open, onOpenChange, lottery, onSave }: LotteryDialogProps) {
   const [name, setName] = useState(lottery?.name || "")
+  const [openingTime, setOpeningTime] = useState(lottery?.openingTime || "08:00")
   const [closingTime, setClosingTime] = useState(lottery?.closingTime || "12:00")
+  const [drawTime, setDrawTime] = useState(lottery?.drawTime || "13:00")
   const [isActive, setIsActive] = useState(lottery?.isActive ?? true)
   const [playsTomorrow, setPlaysTomorrow] = useState(lottery?.playsTomorrow ?? true)
   const [prizes, setPrizes] = useState<Prize[]>(lottery?.prizes || [])
 
   const handleSave = () => {
-    if (!name || !closingTime) {
+    if (!name || !openingTime || !closingTime || !drawTime) {
       toast.error("Por favor complete todos los campos")
       return
     }
@@ -32,7 +34,9 @@ export function LotteryDialog({ open, onOpenChange, lottery, onSave }: LotteryDi
     const lotteryData: Lottery = {
       id: lottery?.id || Date.now().toString(),
       name,
+      openingTime,
       closingTime,
+      drawTime,
       isActive,
       playsTomorrow,
       prizes,
@@ -92,14 +96,36 @@ export function LotteryDialog({ open, onOpenChange, lottery, onSave }: LotteryDi
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="closing-time">Hora de Cierre</Label>
-            <Input
-              id="closing-time"
-              type="time"
-              value={closingTime}
-              onChange={(e) => setClosingTime(e.target.value)}
-            />
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="opening-time">Hora de Apertura</Label>
+              <Input
+                id="opening-time"
+                type="time"
+                value={openingTime}
+                onChange={(e) => setOpeningTime(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="closing-time">Hora de Cierre</Label>
+              <Input
+                id="closing-time"
+                type="time"
+                value={closingTime}
+                onChange={(e) => setClosingTime(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="draw-time">Hora de Jugada</Label>
+              <Input
+                id="draw-time"
+                type="time"
+                value={drawTime}
+                onChange={(e) => setDrawTime(e.target.value)}
+              />
+            </div>
           </div>
 
           <div className="flex items-center justify-between">

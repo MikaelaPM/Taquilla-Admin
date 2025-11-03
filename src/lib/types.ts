@@ -1,7 +1,9 @@
 export interface Lottery {
   id: string
   name: string
+  openingTime: string
   closingTime: string
+  drawTime: string
   isActive: boolean
   playsTomorrow: boolean
   prizes: Prize[]
@@ -59,6 +61,34 @@ export interface Withdrawal {
   amount: number
   timestamp: string
   fromPot: string
+}
+
+export type ModulePermission = 
+  | "dashboard"
+  | "lotteries"
+  | "bets"
+  | "winners"
+  | "history"
+  | "users"
+  | "roles"
+
+export interface Role {
+  id: string
+  name: string
+  description: string
+  permissions: ModulePermission[]
+  createdAt: string
+  isSystem?: boolean
+}
+
+export interface User {
+  id: string
+  name: string
+  email: string
+  roleIds: string[]
+  isActive: boolean
+  createdAt: string
+  createdBy: string
 }
 
 export const ANIMALS = [

@@ -1,23 +1,44 @@
 # Planning Guide
 
-Administrative system for managing Venezuelan animal lottery ("lotería de animalitos") operations, enabling complete control over lotteries, bets, prizes, and financial pot management.
+Administrative system for managing Venezuelan animal lottery ("lotería de animalitos") operations, enabling complete control over lotteries, bets, prizes, financial pot management, user roles, and access permissions.
 
 **Experience Qualities**:
-1. **Professional** - Clean, organized interface that inspires confidence in managing financial transactions
-2. **Efficient** - Quick access to critical operations like creating tickets and viewing pot balances
-3. **Transparent** - Clear visualization of financial flows and winner calculations
+1. **Professional** - Clean, organized interface that inspires confidence in managing financial transactions and user access
+2. **Efficient** - Quick access to critical operations with search and filter capabilities
+3. **Transparent** - Clear visualization of financial flows, winner calculations, and role-based permissions
 
 **Complexity Level**: Complex Application (advanced functionality, accounts)
-  - Multi-faceted lottery management system requiring state management, financial tracking, user bet monitoring, winner calculation, and inter-pot transfers with administrative controls.
+  - Multi-faceted lottery management system requiring state management, financial tracking, user bet monitoring, winner calculation, inter-pot transfers, role-based access control, and multi-user management with granular permissions.
 
 ## Essential Features
 
-### Lottery CRUD Management
-- **Functionality**: Create, read, update, and delete lottery configurations with closing times and prize structures
-- **Purpose**: Define available lottery games that users can bet on
+### Lottery CRUD Management with Time Schedules
+- **Functionality**: Create, read, update, and delete lottery configurations with opening, closing, and draw times, plus prize structures
+- **Purpose**: Define available lottery games with complete time management
 - **Trigger**: Admin clicks "Nueva Lotería" button
-- **Progression**: Form with lottery name, closing time, available animals/numbers → Save → Appears in lottery list → Can edit closing time or prizes
-- **Success criteria**: Lotteries persist, display closing times, and can be marked as inactive for next day
+- **Progression**: Form with lottery name, opening time, closing time, draw time, available animals/numbers → Save → Appears in lottery list with full schedule → Can edit all times or prizes → Search and filter by name, status, or schedule
+- **Success criteria**: Lotteries persist with all three times, display correctly, and can be filtered/searched efficiently
+
+### User & Role Management System
+- **Functionality**: Create users and roles with granular module-level permissions
+- **Purpose**: Control who has access to specific system functions
+- **Trigger**: Admin navigates to Users or Roles tab
+- **Progression**: Create role → Define permissions (dashboard, lotteries, bets, winners, history, users, roles) → Save → Create user → Assign name, email, and one or more roles → User can only access permitted modules → Edit or deactivate users as needed
+- **Success criteria**: Users see only tabs they have permission for, multiple roles per user work correctly, system roles cannot be deleted
+
+### Login & Session Management
+- **Functionality**: User selection screen with session persistence
+- **Purpose**: Identify current user and apply their permissions
+- **Trigger**: App loads without active session or user logs out
+- **Progression**: Login screen → Select user from dropdown → Session starts → User sees personalized header with name/email → Access restricted to permitted modules → Logout clears session
+- **Success criteria**: Sessions persist across page refreshes, logout works correctly, permissions apply immediately
+
+### Search & Filter Capabilities
+- **Functionality**: Real-time search and multi-criteria filters for lotteries, bets, users, and roles
+- **Purpose**: Quickly find specific records in large datasets
+- **Trigger**: User types in search box or changes filter dropdown
+- **Progression**: Enter search term → Results filter instantly → Select status/role filter → Combined filters apply → Clear to reset
+- **Success criteria**: Search is case-insensitive, filters combine correctly, empty states show when no matches
 
 ### Bet Registration
 - **Functionality**: Record user bets with lottery selection, amount, and chosen animals/numbers
