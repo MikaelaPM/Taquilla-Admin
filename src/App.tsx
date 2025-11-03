@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Bet, DrawResult, Lottery, Transfer, Withdrawal, User, Role, ModulePermission } from "@/lib/types"
+import { Bet, DrawResult, Lottery, Transfer, Withdrawal, User, Role, ModulePermission, ApiKey } from "@/lib/types"
 import { INITIAL_POTS, deductFromPot, distributeBetToPots, formatCurrency, transferBetweenPots } from "@/lib/pot-utils"
 import { filterLotteries, filterBets, filterUsers, filterRoles } from "@/lib/filter-utils"
 import { PotCard } from "@/components/PotCard"
@@ -19,9 +19,10 @@ import { DrawDialog } from "@/components/DrawDialog"
 import { RoleDialog } from "@/components/RoleDialog"
 import { UserDialog } from "@/components/UserDialog"
 import { LoginScreen } from "@/components/LoginScreen"
+import { ApiKeyDialog } from "@/components/ApiKeyDialog"
 import { ReportsCard } from "@/components/ReportsCard"
 import { useAuth } from "@/hooks/use-auth"
-import { Plus, Ticket, Trophy, Vault, ListBullets, Calendar, Pencil, Trash, Users, ShieldCheck, SignOut, MagnifyingGlass, Funnel, ChartLine } from "@phosphor-icons/react"
+import { Plus, Ticket, Trophy, Vault, ListBullets, Calendar, Pencil, Trash, Users, ShieldCheck, SignOut, MagnifyingGlass, Funnel, ChartLine, Key, Copy, Eye, EyeSlash } from "@phosphor-icons/react"
 import { toast } from "sonner"
 import { Toaster } from "@/components/ui/sonner"
 import { format } from "date-fns"
@@ -29,6 +30,7 @@ import { es } from "date-fns/locale"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
+import { Label } from "@/components/ui/label"
 
 function App() {
   const [lotteries, setLotteries] = useKV<Lottery[]>("lotteries", [])
@@ -39,6 +41,7 @@ function App() {
   const [withdrawals, setWithdrawals] = useKV<Withdrawal[]>("withdrawals", [])
   const [users, setUsers] = useKV<User[]>("users", [])
   const [roles, setRoles] = useKV<Role[]>("roles", [])
+  const [apiKeys, setApiKeys] = useKV<ApiKey[]>("apiKeys", [])
   const [currentUserId, setCurrentUserId] = useKV<string>("currentUserId", "")
 
   const { currentUser, hasPermission } = useAuth()
@@ -54,6 +57,9 @@ function App() {
   const [editingRole, setEditingRole] = useState<Role | undefined>()
   const [userDialogOpen, setUserDialogOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<User | undefined>()
+  const [apiKeyDialogOpen, setApiKeyDialogOpen] = useState(false)
+  const [editingApiKey, setEditingApiKey] = useState<ApiKey | undefined>()
+  const [visibleKeys, setVisibleKeys] = useState<Set<string>>(new Set())
 
   const [lotterySearch, setLotterySearch] = useState("")
   const [lotteryFilters, setLotteryFilters] = useState<{ isActive?: boolean; playsTomorrow?: boolean }>({})
@@ -68,6 +74,7 @@ function App() {
   const [drawFilters, setDrawFilters] = useState<{ lotteryId?: string }>({})
   const [transferSearch, setTransferSearch] = useState("")
   const [withdrawalSearch, setWithdrawalSearch] = useState("")
+  const [apiKeySearch, setApiKeySearch] = useState("")
 
   useEffect(() => {
     const currentRoles = roles || []
@@ -79,7 +86,7 @@ function App() {
           id: "admin",
           name: "Administrador",
           description: "Acceso completo al sistema",
-          permissions: ["dashboard", "reports", "lotteries", "bets", "winners", "history", "users", "roles"],
+          permissions: ["dashboard", "reports", "lotteries", "bets", "winners", "history", "users", "roles", "api-keys"],
           createdAt: new Date().toISOString(),
           isSystem: true,
         },
@@ -252,6 +259,47 @@ function App() {
     }
   }
 
+  const handleSaveApiKey = (apiKey: ApiKey) => {
+    setApiKeys((current) => {
+      const currentList = current || []
+      const exists = currentList.find((a) => a.id === apiKey.id)
+      if (exists) {
+        return currentList.map((a) => (a.id === apiKey.id ? apiKey : a))
+      }
+      return [...currentList, apiKey]
+    })
+    setEditingApiKey(undefined)
+  }
+
+  const handleDeleteApiKey = (id: string) => {
+    if (confirm("¿Está seguro de eliminar esta API Key? Los sistemas externos no podrán conectarse.")) {
+      setApiKeys((current) => (current || []).filter((a) => a.id !== id))
+      toast.success("API Key eliminada")
+    }
+  }
+
+  const handleEditApiKey = (apiKey: ApiKey) => {
+    setEditingApiKey(apiKey)
+    setApiKeyDialogOpen(true)
+  }
+
+  const toggleKeyVisibility = (id: string) => {
+    setVisibleKeys((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text)
+    toast.success("API Key copiada al portapapeles")
+  }
+
   const currentBets = bets || []
   const currentPots = pots || INITIAL_POTS
   const currentLotteries = lotteries || []
@@ -260,6 +308,7 @@ function App() {
   const currentWithdrawals = withdrawals || []
   const currentUsers = users || []
   const currentRoles = roles || []
+  const currentApiKeys = apiKeys || []
 
   const winners = currentBets.filter((b) => b.isWinner)
   const activeBets = currentBets.filter((b) => !b.isWinner)
@@ -289,6 +338,13 @@ function App() {
     return (
       withdrawalSearch === "" ||
       withdrawal.fromPot.toLowerCase().includes(withdrawalSearch.toLowerCase())
+    )
+  })
+  const filteredApiKeys = currentApiKeys.filter((apiKey) => {
+    return (
+      apiKeySearch === "" ||
+      apiKey.name.toLowerCase().includes(apiKeySearch.toLowerCase()) ||
+      apiKey.description.toLowerCase().includes(apiKeySearch.toLowerCase())
     )
   })
 
@@ -322,7 +378,7 @@ function App() {
 
       <div className="container mx-auto px-4 py-6">
         <Tabs defaultValue="dashboard" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-8">
+          <TabsList className="grid w-full grid-cols-9">
             {hasPermission("dashboard") && (
               <TabsTrigger value="dashboard">
                 <Vault className="mr-2" />
@@ -369,6 +425,12 @@ function App() {
               <TabsTrigger value="roles">
                 <ShieldCheck className="mr-2" />
                 Roles
+              </TabsTrigger>
+            )}
+            {hasPermission("api-keys") && (
+              <TabsTrigger value="api-keys">
+                <Key className="mr-2" />
+                API Keys
               </TabsTrigger>
             )}
           </TabsList>
@@ -1167,6 +1229,155 @@ function App() {
               })}
             </div>
           </TabsContent>
+
+          <TabsContent value="api-keys" className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-semibold">Gestión de API Keys</h2>
+                <p className="text-muted-foreground">Conectar sistemas de ventas externos</p>
+              </div>
+              <Button onClick={() => setApiKeyDialogOpen(true)}>
+                <Plus className="mr-2" />
+                Nueva API Key
+              </Button>
+            </div>
+
+            <Alert>
+              <Key className="h-4 w-4" />
+              <AlertDescription>
+                Las API Keys permiten que sistemas de ventas externos se conecten de forma segura para enviar jugadas y
+                consultar información. Mantenga sus keys privadas y revoque acceso cuando sea necesario.
+              </AlertDescription>
+            </Alert>
+
+            <Card>
+              <CardContent className="pt-6">
+                <div className="relative">
+                  <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar API Keys..."
+                    value={apiKeySearch}
+                    onChange={(e) => setApiKeySearch(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            {filteredApiKeys.length === 0 ? (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-12">
+                  <Key className="h-12 w-12 text-muted-foreground mb-4" />
+                  <p className="text-lg font-medium">
+                    {currentApiKeys.length === 0 ? "No hay API Keys creadas" : "No se encontraron API Keys"}
+                  </p>
+                  <p className="text-muted-foreground mb-4">
+                    {currentApiKeys.length === 0
+                      ? "Cree una API Key para conectar sistemas externos"
+                      : "Intente con otros criterios de búsqueda"}
+                  </p>
+                  {currentApiKeys.length === 0 && (
+                    <Button onClick={() => setApiKeyDialogOpen(true)}>
+                      <Plus className="mr-2" />
+                      Crear Primera API Key
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-4">
+                {filteredApiKeys.map((apiKey) => {
+                  const isVisible = visibleKeys.has(apiKey.id)
+                  return (
+                    <Card key={apiKey.id}>
+                      <CardHeader>
+                        <div className="flex items-start justify-between">
+                          <div className="space-y-1 flex-1">
+                            <div className="flex items-center gap-2">
+                              <CardTitle>{apiKey.name}</CardTitle>
+                              <Badge variant={apiKey.isActive ? "default" : "secondary"}>
+                                {apiKey.isActive ? "Activa" : "Inactiva"}
+                              </Badge>
+                            </div>
+                            <CardDescription>{apiKey.description}</CardDescription>
+                            {apiKey.lastUsed && (
+                              <p className="text-xs text-muted-foreground">
+                                Último uso: {format(new Date(apiKey.lastUsed), "dd/MM/yyyy HH:mm", { locale: es })}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex gap-1">
+                            <Button variant="ghost" size="icon" onClick={() => handleEditApiKey(apiKey)}>
+                              <Pencil />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => handleDeleteApiKey(apiKey.id)}>
+                              <Trash />
+                            </Button>
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium">API Key</Label>
+                          <div className="flex gap-2">
+                            <Input
+                              value={isVisible ? apiKey.key : "sk_" + "•".repeat(48)}
+                              readOnly
+                              className="font-mono text-sm"
+                            />
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={() => toggleKeyVisibility(apiKey.id)}
+                              title={isVisible ? "Ocultar" : "Mostrar"}
+                            >
+                              {isVisible ? <EyeSlash /> : <Eye />}
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={() => copyToClipboard(apiKey.key)}
+                              title="Copiar"
+                            >
+                              <Copy />
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div>
+                          <Label className="text-sm font-medium mb-2 block">Permisos</Label>
+                          <div className="flex flex-wrap gap-1">
+                            {apiKey.permissions.map((perm) => (
+                              <Badge key={perm} variant="outline" className="text-xs">
+                                {perm}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+
+                        <Separator />
+
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                          <div>
+                            <span className="text-muted-foreground">Creada por:</span>
+                            <p className="font-medium">
+                              {currentUsers.find((u) => u.id === apiKey.createdBy)?.name || "Usuario desconocido"}
+                            </p>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Fecha de creación:</span>
+                            <p className="font-medium">
+                              {format(new Date(apiKey.createdAt), "dd/MM/yyyy HH:mm", { locale: es })}
+                            </p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )
+                })}
+              </div>
+            )}
+          </TabsContent>
         </Tabs>
       </div>
 
@@ -1233,6 +1444,17 @@ function App() {
         roles={currentRoles}
         currentUserId={currentUserId}
         onSave={handleSaveUser}
+      />
+
+      <ApiKeyDialog
+        open={apiKeyDialogOpen}
+        onOpenChange={(open) => {
+          setApiKeyDialogOpen(open)
+          if (!open) setEditingApiKey(undefined)
+        }}
+        apiKey={editingApiKey}
+        currentUserId={currentUserId}
+        onSave={handleSaveApiKey}
       />
     </div>
   )

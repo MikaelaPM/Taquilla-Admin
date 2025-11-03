@@ -68,6 +68,13 @@ Administrative system for managing Venezuelan animal lottery ("lotería de anima
 - **Progression**: View profit pot balance → Enter withdrawal amount → Confirm → Record withdrawal → Reduce pot balance
 - **Success criteria**: Withdrawals logged with timestamps, profit pot balance decreases
 
+### API Key Management
+- **Functionality**: Create and manage API keys for external sales systems to connect and send data
+- **Purpose**: Enable secure integration with third-party point-of-sale systems
+- **Trigger**: Admin navigates to API Keys tab
+- **Progression**: Create API Key → Set name and description → Select permissions (create_bets, read_lotteries, read_draws, read_winners) → Generate secure key (sk_...) → Key displayed with copy/hide options → External systems use key for authentication → Track last used timestamp → Revoke by deactivating or deleting
+- **Success criteria**: Keys are cryptographically secure (48 characters), permissions are enforced, inactive keys cannot access the system, keys can be copied and visibility toggled
+
 ## Edge Case Handling
 - **No active lotteries**: Display empty state with prominent "Create First Lottery" button
 - **Insufficient prize pot**: Warning when prize pot balance is low relative to potential payouts
@@ -76,6 +83,8 @@ Administrative system for managing Venezuelan animal lottery ("lotería de anima
 - **Past closing times**: Visual indicator for closed lotteries, prevent new bets
 - **Zero balances**: Disable withdrawal when profit pot is empty
 - **Password authentication**: Incorrect password shows alert, empty password field prevents login when required, admin roles require passwords before user creation
+- **Duplicate API Keys**: System generates unique keys, prevent name collisions with validation
+- **Inactive API Keys**: External requests with inactive keys are rejected immediately
 
 ## Design Direction
 
@@ -147,6 +156,9 @@ Subtle and functional animations that provide immediate feedback for financial o
   - `Calendar` for lottery scheduling
   - `ListBullets` for bet history
   - `Plus`/`Pencil`/`Trash` for CRUD operations
+  - `Key` for API key management
+  - `Eye`/`EyeSlash` for key visibility toggle
+  - `Copy` for copying API keys
 
 - **Spacing**: 
   - Container padding: p-6

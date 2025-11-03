@@ -72,6 +72,7 @@ export type ModulePermission =
   | "history"
   | "users"
   | "roles"
+  | "api-keys"
 
 export interface Role {
   id: string
@@ -92,6 +93,24 @@ export interface User {
   createdAt: string
   createdBy: string
 }
+
+export interface ApiKey {
+  id: string
+  name: string
+  key: string
+  description: string
+  isActive: boolean
+  createdAt: string
+  createdBy: string
+  lastUsed?: string
+  permissions: ApiKeyPermission[]
+}
+
+export type ApiKeyPermission =
+  | "create_bets"
+  | "read_lotteries"
+  | "read_draws"
+  | "read_winners"
 
 export const ANIMALS = [
   { number: "00", name: "Delfín" },
