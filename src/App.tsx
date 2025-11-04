@@ -21,6 +21,7 @@ import { UserDialog } from "@/components/UserDialog"
 import { LoginScreen } from "@/components/LoginScreen"
 import { ApiKeyDialog } from "@/components/ApiKeyDialog"
 import { ReportsCard } from "@/components/ReportsCard"
+import { DrawStatsCard } from "@/components/DrawStatsCard"
 import { useAuth } from "@/hooks/use-auth"
 import { Plus, Ticket, Trophy, Vault, ListBullets, Calendar, Pencil, Trash, Users, ShieldCheck, SignOut, MagnifyingGlass, Funnel, ChartLine, Key, Copy, Eye, EyeSlash } from "@phosphor-icons/react"
 import { toast } from "sonner"
@@ -500,6 +501,8 @@ function App() {
             </div>
 
             <ReportsCard bets={currentBets} draws={currentDraws} lotteries={currentLotteries} />
+            
+            <DrawStatsCard bets={currentBets} draws={currentDraws} lotteries={currentLotteries} />
           </TabsContent>
 
           <TabsContent value="lotteries" className="space-y-6">
