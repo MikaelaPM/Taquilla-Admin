@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
+import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { useKV } from '@github/spark/hooks'
 
 export interface SupabaseUser {
@@ -23,6 +23,12 @@ export function useSupabaseAuth() {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
+    if (!isSupabaseConfigured()) {
+      setCurrentUser(null)
+      setIsLoading(false)
+      return
+    }
+
     if (currentUserId) {
       loadUserData(currentUserId)
     } else {
@@ -32,6 +38,13 @@ export function useSupabaseAuth() {
   }, [currentUserId])
 
   const loadUserData = async (userId: string) => {
+    if (!isSupabaseConfigured()) {
+      setCurrentUserId('')
+      setCurrentUser(null)
+      setIsLoading(false)
+      return
+    }
+
     try {
       setIsLoading(true)
       
@@ -60,6 +73,10 @@ export function useSupabaseAuth() {
   }
 
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+    if (!isSupabaseConfigured()) {
+      return { success: false, error: 'Supabase no está configurado. Configure las variables de entorno VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY' }
+    }
+
     try {
       const { data: user, error } = await supabase
         .from('users')
