@@ -25,6 +25,7 @@ import { DrawStatsCard } from "@/components/DrawStatsCard"
 import { useSupabaseAuth } from "@/hooks/use-supabase-auth"
 import { useSupabaseRoles } from "@/hooks/use-supabase-roles"
 import { useSupabaseUsers } from "@/hooks/use-supabase-users"
+import { useSupabaseLotteries } from "@/hooks/use-supabase-lotteries"
 import { Plus, Ticket, Trophy, Vault, ListBullets, Calendar, Pencil, Trash, Users, ShieldCheck, SignOut, MagnifyingGlass, Funnel, ChartLine, Key, Copy, Eye, EyeSlash } from "@phosphor-icons/react"
 import { toast } from "sonner"
 import { Toaster } from "@/components/ui/sonner"
@@ -36,7 +37,6 @@ import { Separator } from "@/components/ui/separator"
 import { Label } from "@/components/ui/label"
 
 function App() {
-  const [lotteries, setLotteries] = useKV<Lottery[]>("lotteries", [])
   const [bets, setBets] = useKV<Bet[]>("bets", [])
   const [draws, setDraws] = useKV<DrawResult[]>("draws", [])
   const [pots, setPots] = useKV<typeof INITIAL_POTS>("pots", INITIAL_POTS)
@@ -61,8 +61,19 @@ function App() {
     updateUser, 
     deleteUser,
     toggleUserStatus,
-    loadUsers
+    loadUsers,
+    syncUsersToSupabase,
+    cleanDuplicateUsers
   } = useSupabaseUsers()
+  const {
+    lotteries: supabaseLotteries,
+    isLoading: lotteriesLoading,
+    createLottery,
+    updateLottery,
+    deleteLottery,
+    toggleLotteryStatus,
+    loadLotteries
+  } = useSupabaseLotteries()
 
   const [lotteryDialogOpen, setLotteryDialogOpen] = useState(false)
   const [editingLottery, setEditingLottery] = useState<Lottery | undefined>()
@@ -112,22 +123,24 @@ function App() {
     }
   }, [])
 
-  const handleSaveLottery = (lottery: Lottery) => {
-    setLotteries((current) => {
-      const currentList = current || []
-      const exists = currentList.find((l) => l.id === lottery.id)
-      if (exists) {
-        return currentList.map((l) => (l.id === lottery.id ? lottery : l))
-      }
-      return [...currentList, lottery]
-    })
+  const handleSaveLottery = async (lottery: Lottery) => {
+    const exists = supabaseLotteries.find((l) => l.id === lottery.id)
+    
+    if (exists) {
+      // Actualizar lotería existente
+      await updateLottery(lottery.id, lottery)
+    } else {
+      // Crear nueva lotería
+      await createLottery(lottery)
+    }
+    
     setEditingLottery(undefined)
+    setLotteryDialogOpen(false)
   }
 
-  const handleDeleteLottery = (id: string) => {
+  const handleDeleteLottery = async (id: string) => {
     if (confirm("¿Está seguro de eliminar esta lotería?")) {
-      setLotteries((current) => (current || []).filter((l) => l.id !== id))
-      toast.success("Lotería eliminada")
+      await deleteLottery(id)
     }
   }
 
@@ -322,7 +335,7 @@ function App() {
 
   const currentBets = bets || []
   const currentPots = pots || INITIAL_POTS
-  const currentLotteries = lotteries || []
+  const currentLotteries = supabaseLotteries || []
   const currentDraws = draws || []
   const currentTransfers = transfers || []
   const currentWithdrawals = withdrawals || []
@@ -1058,12 +1071,32 @@ function App() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h2 className="text-xl md:text-2xl font-semibold">Gestión de Usuarios</h2>
-                <p className="text-muted-foreground text-sm">Administrar usuarios del sistema</p>
+                <p className="text-muted-foreground text-sm">Administrar usuarios del sistema (Híbrido: Supabase + Local)</p>
               </div>
-              <Button onClick={() => setUserDialogOpen(true)} className="w-full sm:w-auto">
-                <Plus className="mr-2" />
-                Nuevo Usuario
-              </Button>
+              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                <Button 
+                  onClick={syncUsersToSupabase} 
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                  title="Sincronizar usuarios locales con Supabase"
+                >
+                  <ShieldCheck className="mr-2" />
+                  Sincronizar
+                </Button>
+                <Button 
+                  onClick={cleanDuplicateUsers} 
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                  title="Limpiar usuarios duplicados en Supabase"
+                >
+                  <Trash className="mr-2" />
+                  Limpiar Duplicados
+                </Button>
+                <Button onClick={() => setUserDialogOpen(true)} className="w-full sm:w-auto">
+                  <Plus className="mr-2" />
+                  Nuevo Usuario
+                </Button>
+              </div>
             </div>
 
             <Card>

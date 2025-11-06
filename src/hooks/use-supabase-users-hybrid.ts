@@ -85,27 +85,20 @@ export function useSupabaseUsers() {
     }
 
     try {
-      // Cargar usuarios desde Supabase con una consulta más simple
+      // Cargar usuarios desde Supabase
       const { data, error } = await supabase
-        .from('users')
-        .select(`
-          id,
-          name,
-          email,
-          is_active,
-          created_at,
-          created_by
-        `)
+        .from('users_with_roles')
+        .select('*')
         .order('created_at', { ascending: true })
 
       if (error) throw error
 
       // Transformar datos de Supabase al formato local
-      const supabaseUsers: User[] = data.map((user: any) => ({
+      const supabaseUsers: User[] = data.map((user: SupabaseUser) => ({
         id: user.id,
         name: user.name,
         email: user.email,
-        roleIds: [], // Los cargaremos por separado si es necesario
+        roleIds: user.roles?.map(role => role.id) || [],
         isActive: user.is_active,
         createdAt: user.created_at,
         createdBy: user.created_by || 'system',
@@ -153,13 +146,6 @@ export function useSupabaseUsers() {
 
   // Crear nuevo usuario (Supabase + Local)
   const createUser = async (userData: Omit<User, 'id' | 'createdAt'>): Promise<boolean> => {
-    // 1. Verificar si el email ya existe localmente
-    const existingLocalUser = users.find(u => u.email === userData.email)
-    if (existingLocalUser) {
-      toast.error('Ya existe un usuario con este email localmente')
-      return false
-    }
-
     const newUserId = `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
     
     const newUser: User = {
@@ -172,38 +158,12 @@ export function useSupabaseUsers() {
       createdBy: userData.createdBy || 'local-system'
     }
 
-    let supabaseSuccess = false
-
-    // 2. Intentar crear en Supabase primero (con validación robusta)
+    // Intentar crear en Supabase primero
     if (isSupabaseConfigured()) {
       try {
-        console.log(`🔍 Verificando email ${userData.email} en Supabase...`)
-        
-        // Verificación más robusta de duplicados
-        const { data: existingUsers, error: checkError } = await supabase
-          .from('users')
-          .select('id, email, name')
-          .eq('email', userData.email)
-          .limit(1)
-
-        if (checkError) {
-          console.error('Error en verificación de duplicados:', checkError)
-          throw checkError
-        }
-
-        if (existingUsers && existingUsers.length > 0) {
-          const existingUser = existingUsers[0]
-          console.log(`❌ Email ${userData.email} ya existe en Supabase (ID: ${existingUser.id})`)
-          toast.error(`Este email ya está registrado en Supabase por: ${existingUser.name}`)
-          return false
-        }
-
-        console.log(`✅ Email ${userData.email} disponible en Supabase`)
-
         const password = userData.password || 'changeme123'
         const passwordHash = `hashed_${password}_${Date.now()}`
         
-        console.log(`📝 Creando usuario en Supabase...`)
         const { data: supabaseUser, error: userError } = await supabase
           .from('users')
           .insert([
@@ -216,26 +176,14 @@ export function useSupabaseUsers() {
             }
           ])
           .select()
+          .single()
 
-        if (userError) {
-          // Si es error de duplicado, mostrar mensaje específico
-          if (userError.message.includes('duplicate key') || userError.message.includes('unique constraint')) {
-            toast.error('Este email ya está registrado en Supabase')
-            return false
-          }
-          throw userError
-        }
-
-        // Obtener el primer usuario creado
-        const createdUser = supabaseUser && supabaseUser[0]
-        if (!createdUser) {
-          throw new Error('No se pudo crear el usuario en Supabase')
-        }
+        if (userError) throw userError
 
         // Asignar roles si se proporcionaron
         if (userData.roleIds && userData.roleIds.length > 0) {
           const userRoles = userData.roleIds.map(roleId => ({
-            user_id: createdUser.id,
+            user_id: supabaseUser.id,
             role_id: roleId
           }))
 
@@ -249,41 +197,24 @@ export function useSupabaseUsers() {
         }
 
         // Usar el ID de Supabase
-        newUser.id = createdUser.id
-        newUser.createdAt = createdUser.created_at
-        supabaseSuccess = true
+        newUser.id = supabaseUser.id
+        newUser.createdAt = supabaseUser.created_at
 
         console.log('✅ Usuario creado en Supabase:', newUser.email)
+        toast.success('Usuario creado exitosamente en Supabase')
         
       } catch (error: any) {
-        console.error('❌ Error creating user in Supabase:', error)
-        
-        // Manejo específico de errores de duplicate key
-        if (error.message.includes('duplicate key') || 
-            error.message.includes('unique constraint') ||
-            error.message.includes('users_email_key')) {
-          console.log(`🚫 Duplicate email detected: ${userData.email}`)
-          toast.error(`El email ${userData.email} ya está registrado en Supabase`)
-          return false
-        }
-        
-        // Otros errores de Supabase - continuar con localStorage
-        console.log(`⚠️ Supabase error, saving locally only: ${error.message}`)
+        console.error('Error creating user in Supabase:', error)
         toast.error(`Error en Supabase: ${error.message}. Guardando solo localmente.`)
       }
     }
 
-    // Guardar localmente (siempre, si no hay errores de duplicado)
+    // Guardar localmente (siempre)
     const updatedUsers = [...users, newUser]
     setUsers(updatedUsers)
     saveLocalUsers(updatedUsers)
     
-    // Mostrar mensaje apropiado
-    if (supabaseSuccess) {
-      toast.success('Usuario creado exitosamente en Supabase y localmente')
-    } else if (!isSupabaseConfigured()) {
-      toast.success('Usuario creado localmente (Supabase no configurado)')
-    } else {
+    if (!isSupabaseConfigured() || error) {
       toast.success('Usuario creado localmente')
     }
 
@@ -292,38 +223,9 @@ export function useSupabaseUsers() {
 
   // Actualizar usuario (Supabase + Local)
   const updateUser = async (userId: string, userData: Partial<User>): Promise<boolean> => {
-    // Verificar si el email ya existe localmente (excluyendo el usuario actual)
-    if (userData.email) {
-      const existingLocalUser = users.find(u => u.email === userData.email && u.id !== userId)
-      if (existingLocalUser) {
-        toast.error('Ya existe otro usuario con este email')
-        return false
-      }
-    }
-
-    let supabaseSuccess = false
-
     // Intentar actualizar en Supabase primero
     if (isSupabaseConfigured()) {
       try {
-        // Verificar duplicados de email en Supabase si se está cambiando el email
-        if (userData.email) {
-          const { data: existingUsers, error: checkError } = await supabase
-            .from('users')
-            .select('id, email')
-            .eq('email', userData.email)
-            .neq('id', userId)
-
-          if (checkError) {
-            throw checkError
-          }
-
-          if (existingUsers && existingUsers.length > 0) {
-            toast.error('Este email ya está registrado en Supabase')
-            return false
-          }
-        }
-
         const { error } = await supabase
           .from('users')
           .update({
@@ -333,14 +235,7 @@ export function useSupabaseUsers() {
           })
           .eq('id', userId)
 
-        if (error) {
-          // Manejar errores de duplicado específicamente
-          if (error.message.includes('duplicate key') || error.message.includes('unique constraint')) {
-            toast.error('Este email ya está registrado en Supabase')
-            return false
-          }
-          throw error
-        }
+        if (error) throw error
 
         // Actualizar roles si se proporcionaron
         if (userData.roleIds !== undefined) {
@@ -367,35 +262,23 @@ export function useSupabaseUsers() {
           }
         }
 
-        supabaseSuccess = true
         console.log('✅ Usuario actualizado en Supabase')
+        toast.success('Usuario actualizado en Supabase y localmente')
         
       } catch (error: any) {
         console.error('Error updating user in Supabase:', error)
-        
-        // Si es error de duplicado, no continuar
-        if (error.message.includes('duplicate key') || error.message.includes('unique constraint')) {
-          toast.error('Este email ya está registrado en Supabase')
-          return false
-        }
-        
         toast.error(`Error en Supabase: ${error.message}. Actualizando solo localmente.`)
       }
     }
 
-    // Actualizar localmente (siempre, si no hay errores de duplicado)
+    // Actualizar localmente (siempre)
     const updatedUsers = users.map(user =>
       user.id === userId ? { ...user, ...userData } : user
     )
     setUsers(updatedUsers)
     saveLocalUsers(updatedUsers)
 
-    // Mostrar mensaje apropiado
-    if (supabaseSuccess) {
-      toast.success('Usuario actualizado en Supabase y localmente')
-    } else if (!isSupabaseConfigured()) {
-      toast.success('Usuario actualizado localmente (Supabase no configurado)')
-    } else {
+    if (!isSupabaseConfigured()) {
       toast.success('Usuario actualizado localmente')
     }
 
@@ -469,12 +352,13 @@ export function useSupabaseUsers() {
     for (const user of localUsers) {
       try {
         // Verificar si el usuario ya existe en Supabase
-        const { data: existingUsers } = await supabase
+        const { data: existingUser } = await supabase
           .from('users')
           .select('id')
           .eq('email', user.email)
+          .single()
 
-        if (!existingUsers || existingUsers.length === 0) {
+        if (!existingUser) {
           // Crear usuario en Supabase
           const password = 'changeme123'
           const passwordHash = `hashed_${password}_${Date.now()}`
@@ -491,8 +375,9 @@ export function useSupabaseUsers() {
               }
             ])
             .select()
+            .single()
 
-          if (!error && newSupabaseUser && newSupabaseUser.length > 0) {
+          if (!error && newSupabaseUser) {
             syncedCount++
             console.log(`📤 Usuario sincronizado: ${user.email}`)
           }
@@ -507,97 +392,6 @@ export function useSupabaseUsers() {
       await loadUsers() // Recargar para obtener los IDs correctos
     } else {
       toast.info('Todos los usuarios ya están sincronizados')
-    }
-  }
-
-  // Limpiar usuarios duplicados en Supabase
-  const cleanDuplicateUsers = async (): Promise<void> => {
-    if (!isSupabaseConfigured()) {
-      toast.error('Supabase no está configurado')
-      return
-    }
-
-    try {
-      console.log('🧹 Iniciando limpieza de duplicados...')
-      toast.info('Limpiando usuarios duplicados...')
-
-      // Obtener todos los usuarios
-      const { data: allUsers, error: fetchError } = await supabase
-        .from('users')
-        .select('id, name, email, created_at')
-        .order('created_at', { ascending: true })
-
-      if (fetchError) throw fetchError
-
-      console.log(`📊 Total usuarios: ${allUsers.length}`)
-
-      // Agrupar por email
-      const emailGroups: { [key: string]: any[] } = {}
-      allUsers.forEach(user => {
-        if (!emailGroups[user.email]) {
-          emailGroups[user.email] = []
-        }
-        emailGroups[user.email].push(user)
-      })
-
-      // Encontrar duplicados
-      const duplicateEmails = Object.keys(emailGroups).filter(email => emailGroups[email].length > 1)
-      
-      if (duplicateEmails.length === 0) {
-        toast.success('No se encontraron duplicados')
-        console.log('✅ No hay duplicados para limpiar')
-        return
-      }
-
-      console.log(`⚠️ Encontrados ${duplicateEmails.length} emails duplicados`)
-
-      let deletedCount = 0
-
-      for (const email of duplicateEmails) {
-        const duplicateUsers = emailGroups[email]
-        
-        // Mantener el más antiguo
-        duplicateUsers.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-        const keepUser = duplicateUsers[0]
-        const deleteUsers = duplicateUsers.slice(1)
-
-        console.log(`📧 ${email}: manteniendo ${keepUser.id}, eliminando ${deleteUsers.length}`)
-
-        for (const user of deleteUsers) {
-          try {
-            // Eliminar relaciones primero
-            await supabase
-              .from('user_roles')
-              .delete()
-              .eq('user_id', user.id)
-
-            // Eliminar usuario
-            const { error: deleteError } = await supabase
-              .from('users')
-              .delete()
-              .eq('id', user.id)
-
-            if (deleteError) {
-              console.error(`❌ Error eliminando ${user.email}:`, deleteError)
-            } else {
-              deletedCount++
-              console.log(`🗑️ Eliminado: ${user.name} (${user.email})`)
-            }
-          } catch (error) {
-            console.error(`Error eliminando ${user.email}:`, error)
-          }
-        }
-      }
-
-      toast.success(`Limpieza completada! ${deletedCount} usuarios duplicados eliminados`)
-      console.log(`✅ Limpieza completada: ${deletedCount} usuarios eliminados`)
-
-      // Recargar usuarios
-      await loadUsers()
-
-    } catch (error: any) {
-      console.error('Error limpiando duplicados:', error)
-      toast.error(`Error limpiando duplicados: ${error.message}`)
     }
   }
 
@@ -616,6 +410,5 @@ export function useSupabaseUsers() {
     deleteUser,
     toggleUserStatus,
     syncUsersToSupabase,
-    cleanDuplicateUsers,
   }
 }

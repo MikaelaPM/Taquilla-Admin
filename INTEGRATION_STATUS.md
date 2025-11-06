@@ -146,7 +146,7 @@ END $$;
 - Crear/editar/eliminar roles
 - Actualizar permisos
 
-### Módulo 3: USUARIOS (Pendiente)
+### Módulo 3: USUARIOS (Listo)
 - Leer usuarios desde `users_with_roles` view
 - Crear nuevos usuarios
 - Editar usuarios existentes

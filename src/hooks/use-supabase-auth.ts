@@ -38,28 +38,60 @@ export function useSupabaseAuth() {
     try {
       setIsLoading(true)
       
-      // Si es el admin temporal, crear usuario directamente
-      if (userId === 'admin-temp-id') {
+      // Verificar si es un UUID válido
+      const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(userId)
+      
+      if (!isValidUUID) {
+        console.error('Invalid UUID format:', userId)
+        setCurrentUser(null)
+        return
+      }
+
+      // Intentar cargar desde Supabase primero
+      if (isSupabaseConfigured()) {
+        try {
+          const { data: userData, error } = await supabase
+            .from('users_with_roles')
+            .select('*')
+            .eq('id', userId)
+            .single()
+
+          if (!error && userData) {
+            // Usuario real de Supabase
+            const user: SupabaseUser = {
+              id: userData.id,
+              name: userData.name,
+              email: userData.email,
+              is_active: userData.is_active,
+              roles: userData.roles || [],
+              all_permissions: userData.all_permissions || []
+            }
+            setCurrentUser(user)
+            return
+          }
+        } catch (supabaseError) {
+          console.log('Usuario no encontrado en Supabase, manteniendo usuario actual')
+        }
+      }
+
+      // Si no se encontró en Supabase y no hay usuario actual, crear uno temporal
+      if (!currentUser) {
         const tempUser: SupabaseUser = {
           id: userId,
-          name: 'Administrador Principal',
-          email: 'admin@loteria.com',
+          name: 'Usuario Temporal',
+          email: 'temp@loteria.com',
           is_active: true,
           roles: [{
-            id: 'admin-role',
-            name: 'Super Administrador',
-            description: 'Acceso completo al sistema',
+            id: crypto.randomUUID ? crypto.randomUUID() : 'temp-role-uuid',
+            name: 'Usuario Temporal',
+            description: 'Acceso temporal',
             permissions: ['*'],
-            is_system: true
+            is_system: false
           }],
           all_permissions: ['*']
         }
         setCurrentUser(tempUser)
-        return
       }
-      
-      // Para otros usuarios, intentar cargar desde Supabase
-      setCurrentUser(null)
       
     } catch (error) {
       console.error('Error in loadUserData:', error)
@@ -71,30 +103,108 @@ export function useSupabaseAuth() {
 
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      // Bypass directo para admin - sin validaciones complejas
-      if (email === 'admin@loteria.com' && password === 'admin123') {
-        const adminUserId = 'admin-temp-id'
-        const tempUser: SupabaseUser = {
-          id: adminUserId,
-          name: 'Administrador Principal',
-          email: 'admin@loteria.com',
+      // Usuarios de prueba con UUIDs válidos
+      const testUsers = {
+        'admin@loteria.com': {
+          password: 'admin123',
+          user: {
+            name: 'Administrador Principal',
+            email: 'admin@loteria.com',
+            roles: [{
+              id: crypto.randomUUID ? crypto.randomUUID() : 'admin-role-uuid',
+              name: 'Super Administrador',
+              description: 'Acceso completo al sistema',
+              permissions: ['*'],
+              is_system: true
+            }],
+            all_permissions: ['*']
+          }
+        },
+        'juan@loteria.com': {
+          password: 'usuario123',
+          user: {
+            name: 'Juan Pérez',
+            email: 'juan@loteria.com',
+            roles: [{
+              id: crypto.randomUUID ? crypto.randomUUID() : 'operator-role-uuid',
+              name: 'Operador',
+              description: 'Operaciones de lotería',
+              permissions: ['lotteries.read', 'bets.read', 'bets.create'],
+              is_system: false
+            }],
+            all_permissions: ['lotteries.read', 'bets.read', 'bets.create']
+          }
+        },
+        'maria@loteria.com': {
+          password: 'usuario123',
+          user: {
+            name: 'María García',
+            email: 'maria@loteria.com',
+            roles: [{
+              id: crypto.randomUUID ? crypto.randomUUID() : 'supervisor-role-uuid',
+              name: 'Supervisor',
+              description: 'Supervisión y reportes',
+              permissions: ['lotteries.read', 'bets.read', 'draws.read', 'reports.read'],
+              is_system: false
+            }],
+            all_permissions: ['lotteries.read', 'bets.read', 'draws.read', 'reports.read']
+          }
+        }
+      }
+
+      // Verificar si es un usuario de prueba
+      const testUser = testUsers[email as keyof typeof testUsers]
+      if (testUser && password === testUser.password) {
+        // Generar UUID válido
+        const userUUID = crypto.randomUUID ? crypto.randomUUID() : 
+          'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            const r = Math.random() * 16 | 0;
+            const v = c == 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+          });
+        
+        const user: SupabaseUser = {
+          id: userUUID,
+          name: testUser.user.name,
+          email: testUser.user.email,
           is_active: true,
-          roles: [{
-            id: 'admin-role',
-            name: 'Super Administrador',
-            description: 'Acceso completo al sistema',
-            permissions: ['*'],
-            is_system: true
-          }],
-          all_permissions: ['*']
+          roles: testUser.user.roles,
+          all_permissions: testUser.user.all_permissions
         }
         
-        setCurrentUserId(adminUserId)
-        setCurrentUser(tempUser)
+        setCurrentUserId(userUUID)
+        setCurrentUser(user)
         return { success: true }
       }
 
-      return { success: false, error: 'Credenciales incorrectas' }
+      // Para otros usuarios, intentar autenticación real con Supabase
+      if (!isSupabaseConfigured()) {
+        return { success: false, error: 'Credenciales incorrectas' }
+      }
+
+      const { data: user, error } = await supabase
+        .from('users')
+        .select('id, password_hash, is_active')
+        .eq('email', email)
+        .single()
+
+      if (error || !user) {
+        return { success: false, error: 'Credenciales incorrectas' }
+      }
+
+      if (!user.is_active) {
+        return { success: false, error: 'Usuario inactivo. Contacte al administrador' }
+      }
+
+      const passwordMatch = await verifyPassword(password, user.password_hash)
+      
+      if (!passwordMatch) {
+        return { success: false, error: 'Credenciales incorrectas' }
+      }
+
+      // Usuario autenticado correctamente
+      setCurrentUserId(user.id)
+      return { success: true }
     } catch (error) {
       console.error('Login error:', error)
       return { success: false, error: 'Error al iniciar sesión' }

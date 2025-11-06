@@ -118,7 +118,7 @@ export function useSupabaseRoles() {
     }
 
     try {
-      const { data, error } = await supabase
+      const { data: newRoles, error } = await supabase
         .from('roles')
         .insert([
           {
@@ -129,7 +129,6 @@ export function useSupabaseRoles() {
           }
         ])
         .select()
-        .single()
 
       if (error) {
         // Si es un error de políticas RLS, usar modo local
@@ -147,14 +146,20 @@ export function useSupabaseRoles() {
         throw error
       }
 
+      // Obtener el rol creado
+      const createdRole = newRoles && newRoles[0]
+      if (!createdRole) {
+        throw new Error('No se pudo crear el rol en Supabase')
+      }
+
       // Agregar el nuevo rol al estado local
       const newRole: Role = {
-        id: data.id,
-        name: data.name,
-        description: data.description,
-        permissions: data.permissions,
-        createdAt: data.created_at,
-        isSystem: data.is_system,
+        id: createdRole.id,
+        name: createdRole.name,
+        description: createdRole.description,
+        permissions: createdRole.permissions,
+        createdAt: createdRole.created_at,
+        isSystem: createdRole.is_system,
       }
 
       setRoles(current => [...current, newRole])
@@ -196,7 +201,7 @@ export function useSupabaseRoles() {
     }
 
     try {
-      const { data, error } = await supabase
+      const { data: updatedRoles, error } = await supabase
         .from('roles')
         .update({
           name: roleData.name,
@@ -205,7 +210,6 @@ export function useSupabaseRoles() {
         })
         .eq('id', roleId)
         .select()
-        .single()
 
       if (error) {
         // Si es un error de políticas RLS, usar modo local
@@ -224,15 +228,21 @@ export function useSupabaseRoles() {
         throw error
       }
 
+      // Verificar que se actualizó correctamente
+      const updatedRole = updatedRoles && updatedRoles[0]
+      if (!updatedRole) {
+        throw new Error('No se pudo actualizar el rol en Supabase')
+      }
+
       // Actualizar el rol en el estado local
       setRoles(current =>
         current.map(role =>
           role.id === roleId
             ? {
                 ...role,
-                name: data.name,
-                description: data.description,
-                permissions: data.permissions,
+                name: updatedRole.name,
+                description: updatedRole.description,
+                permissions: updatedRole.permissions,
               }
             : role
         )
