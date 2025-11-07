@@ -159,7 +159,7 @@ export const useSupabaseDraws = () => {
       } else {
         // Recargar datos desde Supabase
         await loadDraws()
-        toast.success('✅ Sorteo creado exitosamente en Supabase')
+        toast.success('Sorteo creado exitosamente en Supabase')
         return true
       }
     } catch (err) {

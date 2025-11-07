@@ -45,6 +45,7 @@ export function BetDialog({ open, onOpenChange, lotteries, onSave }: BetDialogPr
       amount: Number(amount),
       timestamp: new Date().toISOString(),
       potentialWin,
+      isWinner: false
     }
 
     onSave(bet)

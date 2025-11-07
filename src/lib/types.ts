@@ -26,7 +26,7 @@ export interface Bet {
   amount: number
   timestamp: string
   potentialWin: number
-  isWinner?: boolean
+  isWinner: boolean
 }
 
 export interface DrawResult {

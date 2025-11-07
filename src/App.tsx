@@ -28,6 +28,7 @@ import { useSupabaseRoles } from "@/hooks/use-supabase-roles"
 import { useSupabaseUsers } from "@/hooks/use-supabase-users"
 import { useSupabaseLotteries } from "@/hooks/use-supabase-lotteries"
 import { useSupabaseDraws } from "@/hooks/use-supabase-draws"
+import { useSupabaseBets } from "@/hooks/use-supabase-bets"
 import { Plus, Ticket, Trophy, Vault, ListBullets, Calendar, Pencil, Trash, Users, ShieldCheck, SignOut, MagnifyingGlass, Funnel, ChartLine, Key, Copy, Eye, EyeSlash } from "@phosphor-icons/react"
 import { toast } from "sonner"
 import { Toaster } from "@/components/ui/sonner"
@@ -39,7 +40,6 @@ import { Separator } from "@/components/ui/separator"
 import { Label } from "@/components/ui/label"
 
 function App() {
-  const [bets, setBets] = useKV<Bet[]>("bets", [])
   const [draws, setDraws] = useKV<DrawResult[]>("draws", [])
   const [pots, setPots] = useKV<typeof INITIAL_POTS>("pots", INITIAL_POTS)
   const [transfers, setTransfers] = useKV<Transfer[]>("transfers", [])
@@ -86,6 +86,17 @@ function App() {
     deleteDraw,
     getDrawStats
   } = useSupabaseDraws()
+
+  // Hook para jugadas
+  const {
+    bets: supabaseBets,
+    isLoading: betsLoading,
+    createBet,
+    updateBet,
+    deleteBet,
+    markWinners,
+    isConnected: betsConnected
+  } = useSupabaseBets()
 
   const [lotteryDialogOpen, setLotteryDialogOpen] = useState(false)
   const [editingLottery, setEditingLottery] = useState<Lottery | undefined>()
@@ -163,9 +174,27 @@ function App() {
     setLotteryDialogOpen(true)
   }
 
-  const handleSaveBet = (bet: Bet) => {
-    setBets((current) => [...(current || []), bet])
-    setPots((current) => distributeBetToPots(bet.amount, current || INITIAL_POTS))
+  const handleSaveBet = async (bet: Bet) => {
+    console.log('🎯 handleSaveBet llamado con:', bet)
+    
+    // Crear la jugada en Supabase
+    const success = await createBet({
+      lotteryId: bet.lotteryId,
+      lotteryName: bet.lotteryName,
+      animalNumber: bet.animalNumber,
+      animalName: bet.animalName,
+      amount: bet.amount,
+      potentialWin: bet.potentialWin,
+      isWinner: false
+    })
+
+    console.log('📊 Resultado de createBet:', success)
+
+    if (success) {
+      // Actualizar los potes solo si se guardó exitosamente
+      setPots((current) => distributeBetToPots(bet.amount, current || INITIAL_POTS))
+      console.log('✅ Potes actualizados')
+    }
   }
 
   const handleTransfer = (fromIndex: number, toIndex: number, amount: number) => {
@@ -195,17 +224,15 @@ function App() {
     setWithdrawals((current) => [...(current || []), withdrawal])
   }
 
-  const handleDraw = (result: DrawResult, winners: Bet[]) => {
+  const handleDraw = async (result: DrawResult, winners: Bet[]) => {
     setDraws((current) => [...(current || []), result])
 
-    setBets((current) =>
-      (current || []).map((bet) => {
-        if (winners.find((w) => w.id === bet.id)) {
-          return { ...bet, isWinner: true }
-        }
-        return bet
-      })
-    )
+    // Marcar ganadores usando el hook de Supabase
+    if (winners.length > 0) {
+      for (const winner of winners) {
+        await updateBet(winner.id, { isWinner: true })
+      }
+    }
 
     if (result.totalPayout > 0) {
       setPots((current) => deductFromPot(0, result.totalPayout, current || INITIAL_POTS))
@@ -347,7 +374,7 @@ function App() {
     toast.success("API Key copiada al portapapeles")
   }
 
-  const currentBets = bets || []
+  const currentBets = supabaseBets || []
   const currentPots = pots || INITIAL_POTS
   const currentLotteries = supabaseLotteries || []
   const currentDraws = draws || []
