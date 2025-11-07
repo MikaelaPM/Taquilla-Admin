@@ -22,10 +22,12 @@ import { LoginScreen } from "@/components/LoginScreen"
 import { ApiKeyDialog } from "@/components/ApiKeyDialog"
 import { ReportsCard } from "@/components/ReportsCard"
 import { DrawStatsCard } from "@/components/DrawStatsCard"
+import { DrawManagementDialog } from "@/components/DrawManagementDialog"
 import { useSupabaseAuth } from "@/hooks/use-supabase-auth"
 import { useSupabaseRoles } from "@/hooks/use-supabase-roles"
 import { useSupabaseUsers } from "@/hooks/use-supabase-users"
 import { useSupabaseLotteries } from "@/hooks/use-supabase-lotteries"
+import { useSupabaseDraws } from "@/hooks/use-supabase-draws"
 import { Plus, Ticket, Trophy, Vault, ListBullets, Calendar, Pencil, Trash, Users, ShieldCheck, SignOut, MagnifyingGlass, Funnel, ChartLine, Key, Copy, Eye, EyeSlash } from "@phosphor-icons/react"
 import { toast } from "sonner"
 import { Toaster } from "@/components/ui/sonner"
@@ -75,6 +77,16 @@ function App() {
     loadLotteries
   } = useSupabaseLotteries()
 
+  // Hook para sorteos
+  const {
+    draws: supabaseDraws,
+    isLoading: drawsLoading,
+    createDraw,
+    updateDraw,
+    deleteDraw,
+    getDrawStats
+  } = useSupabaseDraws()
+
   const [lotteryDialogOpen, setLotteryDialogOpen] = useState(false)
   const [editingLottery, setEditingLottery] = useState<Lottery | undefined>()
   const [betDialogOpen, setBetDialogOpen] = useState(false)
@@ -82,6 +94,8 @@ function App() {
   const [transferFromIndex, setTransferFromIndex] = useState<number | undefined>()
   const [withdrawDialogOpen, setWithdrawDialogOpen] = useState(false)
   const [drawDialogOpen, setDrawDialogOpen] = useState(false)
+  const [drawManagementDialogOpen, setDrawManagementDialogOpen] = useState(false)
+  const [editingDraw, setEditingDraw] = useState<any | undefined>()
   const [roleDialogOpen, setRoleDialogOpen] = useState(false)
   const [editingRole, setEditingRole] = useState<Role | undefined>()
   const [userDialogOpen, setUserDialogOpen] = useState(false)
@@ -448,6 +462,12 @@ function App() {
                   <span className="hidden md:inline">Jugadas</span>
                 </TabsTrigger>
               )}
+              {hasPermission("draws.read") && (
+                <TabsTrigger value="draws" className="flex-shrink-0">
+                  <Trophy className="md:mr-2" />
+                  <span className="hidden md:inline">Sorteos</span>
+                </TabsTrigger>
+              )}
               {hasPermission("winners") && (
                 <TabsTrigger value="winners" className="flex-shrink-0">
                   <Trophy className="md:mr-2" />
@@ -786,6 +806,193 @@ function App() {
                     </Table>
                   </div>
                 </ScrollArea>
+              </Card>
+            )}
+          </TabsContent>
+
+          <TabsContent value="draws" className="space-y-4 md:space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h2 className="text-xl md:text-2xl font-semibold">Gestión de Sorteos</h2>
+                <p className="text-muted-foreground text-sm">Administrar sorteos y resultados de loterías</p>
+              </div>
+              <Button 
+                onClick={() => {
+                  setEditingDraw(undefined)
+                  setDrawManagementDialogOpen(true)
+                }} 
+                className="w-full sm:w-auto"
+              >
+                <Plus className="mr-2" />
+                Nuevo Sorteo
+              </Button>
+            </div>
+
+            {/* Estadísticas de Sorteos */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Estadísticas de Sorteos</CardTitle>
+                <CardDescription>Resumen de sorteos realizados</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold">{supabaseDraws.length}</div>
+                    <div className="text-sm text-muted-foreground">Total Sorteos</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold">{supabaseDraws.filter(d => (d.winners_count || 0) > 0).length}</div>
+                    <div className="text-sm text-muted-foreground">Sorteos con Ganadores</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold">
+                      {formatCurrency(supabaseDraws.reduce((sum, d) => sum + (d.total_payout || 0), 0))}
+                    </div>
+                    <div className="text-sm text-muted-foreground">Total Pagado</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold">{supabaseLotteries.length}</div>
+                    <div className="text-sm text-muted-foreground">Loterías Activas</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {drawsLoading ? (
+              <Card>
+                <CardContent className="flex items-center justify-center h-32">
+                  <p className="text-muted-foreground">Cargando sorteos...</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Lista de Sorteos</CardTitle>
+                  <CardDescription>Todos los sorteos registrados en el sistema</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+                    <div className="flex-1 relative">
+                      <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        placeholder="Buscar por lotería, animal o fecha..."
+                        value={drawSearch}
+                        onChange={(e) => setDrawSearch(e.target.value)}
+                        className="pl-10"
+                      />
+                    </div>
+                    <Select
+                      value={drawFilters.lotteryId || "all"}
+                      onValueChange={(value) =>
+                        setDrawFilters((f) => ({ ...f, lotteryId: value === "all" ? undefined : value }))
+                      }
+                    >
+                      <SelectTrigger className="w-full sm:w-[200px]">
+                        <SelectValue placeholder="Filtrar por lotería" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todas las loterías</SelectItem>
+                        {supabaseLotteries.map((lottery) => (
+                          <SelectItem key={lottery.id} value={lottery.id}>
+                            {lottery.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <ScrollArea className="h-[400px] md:h-[500px]">
+                    <div className="rounded-md border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-[120px]">Fecha</TableHead>
+                            <TableHead className="w-[80px]">Hora</TableHead>
+                            <TableHead>Lotería</TableHead>
+                            <TableHead>Animal</TableHead>
+                            <TableHead className="w-[100px]">Estado</TableHead>
+                            <TableHead className="w-[120px]">Premio</TableHead>
+                            <TableHead className="w-[100px]">Acciones</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {supabaseDraws
+                            .filter((draw) => {
+                              if (drawSearch) {
+                                const lottery = supabaseLotteries.find(l => l.id === draw.lottery_id)
+                                const lotteryName = lottery?.name || ''
+                                const searchLower = drawSearch.toLowerCase()
+                                if (
+                                  !lotteryName.toLowerCase().includes(searchLower) &&
+                                  !draw.winning_animal_name.toLowerCase().includes(searchLower) &&
+                                  !draw.winning_animal_number.includes(searchLower) &&
+                                  !draw.draw_time.toLowerCase().includes(searchLower)
+                                ) {
+                                  return false
+                                }
+                              }
+                              if (drawFilters.lotteryId && draw.lottery_id !== drawFilters.lotteryId) {
+                                return false
+                              }
+                              return true
+                            })
+                            .map((draw) => {
+                              const lottery = supabaseLotteries.find(l => l.id === draw.lottery_id)
+                              return (
+                                <TableRow key={draw.id}>
+                                  <TableCell className="font-medium">
+                                    {format(new Date(draw.draw_time), 'dd/MM/yyyy')}
+                                  </TableCell>
+                                  <TableCell>{format(new Date(draw.draw_time), 'HH:mm')}</TableCell>
+                                  <TableCell>{lottery?.name || draw.lottery_name || 'N/A'}</TableCell>
+                                  <TableCell>
+                                    <span className="font-mono">
+                                      {draw.winning_animal_number} - {draw.winning_animal_name}
+                                    </span>
+                                  </TableCell>
+                                  <TableCell>
+                                    <Badge variant={(draw.winners_count || 0) > 0 ? "default" : "outline"}>
+                                      {(draw.winners_count || 0) > 0 ? "Con ganadores" : "Sin ganadores"}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell>
+                                    {(draw.total_payout || 0) > 0
+                                      ? formatCurrency(draw.total_payout)
+                                      : "-"}
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="flex gap-2">
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => {
+                                          setEditingDraw(draw)
+                                          setDrawManagementDialogOpen(true)
+                                        }}
+                                      >
+                                        <Pencil className="h-4 w-4" />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => {
+                                          if (confirm('¿Estás seguro de que quieres eliminar este sorteo?')) {
+                                            deleteDraw(draw.id)
+                                          }
+                                        }}
+                                      >
+                                        <Trash className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              )
+                            })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </ScrollArea>
+                </CardContent>
               </Card>
             )}
           </TabsContent>
@@ -1511,6 +1718,22 @@ function App() {
         lotteries={currentLotteries}
         bets={currentBets}
         onDraw={handleDraw}
+      />
+
+      <DrawManagementDialog
+        open={drawManagementDialogOpen}
+        onOpenChange={(open) => {
+          setDrawManagementDialogOpen(open)
+          if (!open) setEditingDraw(undefined)
+        }}
+        draw={editingDraw}
+        onSave={async (drawData) => {
+          if (editingDraw) {
+            return await updateDraw(editingDraw.id, drawData)
+          } else {
+            return await createDraw(drawData)
+          }
+        }}
       />
 
       <RoleDialog

@@ -1,5 +1,38 @@
 # 🎯 ESTADO FINAL DE INTEGRACIÓN - SISTEMA DE LOTERÍA DE ANIMALITOS
 
+> Actualización corta: Módulo 7 (Sorteos) integrado con Supabase + fallback local (2025-11-07)
+
+- Hook: `src/hooks/use-supabase-draws.ts`
+   - Lee/crea/actualiza/borra en la tabla `draws` (campos reales: `lottery_id`, `lottery_name`, `winning_animal_number`, `winning_animal_name`, `draw_time`, `total_payout`, `winners_count`).
+   - Fallback local automático usando `localStorage` clave `supabase_draws_backup_v2` cuando Supabase no responde o políticas RLS bloquean.
+   - `testConnection()` hace solo SELECT (salud) para evitar fallos por permisos en INSERT.
+- UI: `DrawManagementDialog` mapea fecha/hora correctamente desde `draw_time` y permite crear/editar sorteos.
+- App: Tabla de Sorteos ahora usa `winners_count` y `total_payout` con formateo de fecha/hora desde `draw_time`.
+- Permisos: Para insertar en `draws` se requiere permiso `winners` (ver políticas RLS en `supabase-schema.sql`).
+
+Cómo probar rápido:
+1) Iniciar dev server y abrir la app (puerto mostrado por Vite, p. ej. 5002/5003).
+2) Ir a la pestaña “Sorteos”.
+3) Click en “Nuevo Sorteo”, completar formulario y Guardar.
+4) Si Supabase falla, verás un toast indicando guardado local; cuando vuelva a estar disponible, podrás sincronizar creando/actualizando nuevamente.
+5) Botón “Test DB” en el diálogo ejecuta `testConnection()` y muestra resultado (OK/Error).
+
+Notas:
+- La política RLS “Users with winners permission can insert draws” controla el INSERT. Usa un usuario con rol que tenga `"winners"`.
+- Para la inserción, el hook consulta el nombre de la lotería en `lotteries` para rellenar `lottery_name`.
+- El campo `isWinner` del formulario se mapea a `winners_count` (1 si hay ganadores, 0 si no) y `prizeAmount` a `total_payout`.
+
+
+> Actualización: 2025-11-07
+
+Resumen de verificación técnica reciente:
+- Build (vite build): PASS
+- Errores de compilación en editor: PASS
+- Servidor de desarrollo (vite dev): PASS
+- Pestañas activas en UI: Dashboard, Reportes, Loterías, Jugadas, Sorteos, Ganadores, Historial, Usuarios, Roles, API Keys
+- Sorteos (Módulo 7): Integrado y operativo (CRUD con Supabase + fallback local; diálogo de gestión habilitado)
+
+
 ## 📊 RESUMEN EJECUTIVO
 
 **🎯 PUNTUACIÓN GENERAL: 29/29 (100%) - ¡PERFECTO!**

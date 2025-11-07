@@ -1,0 +1,356 @@
+import { useState, useEffect } from "react"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Calendar as CalendarIcon, Info } from "@phosphor-icons/react"
+import { format } from "date-fns"
+import { es } from "date-fns/locale"
+import { cn } from "@/lib/utils"
+import { Calendar } from "@/components/ui/calendar"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { SupabaseDraw, DrawFormData } from "@/hooks/use-supabase-draws"
+import { useSupabaseLotteries } from "@/hooks/use-supabase-lotteries"
+import { ANIMALS } from "@/lib/types"
+import { toast } from "sonner"
+
+interface DrawManagementDialogProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  draw?: SupabaseDraw | null
+  onSave: (drawData: DrawFormData) => Promise<boolean>
+}
+
+export function DrawManagementDialog({ 
+  open, 
+  onOpenChange, 
+  draw, 
+  onSave 
+}: DrawManagementDialogProps) {
+  const { lotteries } = useSupabaseLotteries()
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  
+  // Estados del formulario
+  const [formData, setFormData] = useState<DrawFormData>({
+    lotteryId: '',
+    animalNumber: '',
+    animalName: '',
+    drawDate: format(new Date(), 'yyyy-MM-dd'),
+    drawTime: '',
+    isWinner: false,
+    prizeAmount: undefined
+  })
+
+  const [datePickerOpen, setDatePickerOpen] = useState(false)
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date())
+
+  // Resetear formulario cuando se abre/cierra el diálogo
+  useEffect(() => {
+    if (open) {
+      if (draw) {
+          // Modo edición (mapear desde SupabaseDraw)
+          const dt = new Date(draw.draw_time)
+          const yyyy = dt.getFullYear()
+          const mm = String(dt.getMonth() + 1).padStart(2, '0')
+          const dd = String(dt.getDate()).padStart(2, '0')
+          const hh = String(dt.getHours()).padStart(2, '0')
+          const mi = String(dt.getMinutes()).padStart(2, '0')
+
+          setFormData({
+            lotteryId: draw.lottery_id,
+            animalNumber: draw.winning_animal_number,
+            animalName: draw.winning_animal_name,
+            drawDate: `${yyyy}-${mm}-${dd}`,
+            drawTime: `${hh}:${mi}`,
+            isWinner: (draw.winners_count || 0) > 0,
+            prizeAmount: draw.total_payout || undefined
+          })
+          setSelectedDate(dt)
+      } else {
+        // Modo creación
+        const today = new Date()
+        setFormData({
+          lotteryId: '',
+          animalNumber: '',
+          animalName: '',
+          drawDate: format(today, 'yyyy-MM-dd'),
+          drawTime: '',
+          isWinner: false,
+          prizeAmount: undefined
+        })
+        setSelectedDate(today)
+      }
+    }
+  }, [open, draw])
+
+  // Manejar selección de animal
+  const handleAnimalSelect = (animalNumber: string) => {
+    const animal = ANIMALS.find(a => a.number === animalNumber)
+    if (animal) {
+      setFormData(prev => ({
+        ...prev,
+        animalNumber: animal.number,
+        animalName: animal.name
+      }))
+    }
+  }
+
+  // Manejar cambio de fecha
+  const handleDateSelect = (date: Date | undefined) => {
+    if (date) {
+      setSelectedDate(date)
+      setFormData(prev => ({
+        ...prev,
+        drawDate: format(date, 'yyyy-MM-dd')
+      }))
+      setDatePickerOpen(false)
+    }
+  }
+
+  // Validar formulario
+  const isFormValid = () => {
+    return (
+      formData.lotteryId &&
+      formData.animalNumber &&
+      formData.animalName &&
+      formData.drawDate &&
+      formData.drawTime &&
+      (!formData.isWinner || (formData.isWinner && formData.prizeAmount && formData.prizeAmount > 0))
+    )
+  }
+
+  // Manejar envío del formulario
+  const handleSubmit = async () => {
+    if (!isFormValid()) {
+      toast.error('Por favor completa todos los campos requeridos')
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      const success = await onSave(formData)
+      if (success) {
+        onOpenChange(false)
+      }
+    } catch (error) {
+      console.error('Error saving draw:', error)
+      toast.error('Error al guardar el sorteo')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>
+            {draw ? 'Editar Sorteo' : 'Nuevo Sorteo'}
+          </DialogTitle>
+          <DialogDescription>
+            {draw 
+              ? 'Modifica los datos del sorteo seleccionado'
+              : 'Crea un nuevo sorteo para una lotería específica'
+            }
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid gap-4 py-4">
+          {/* Selección de Lotería */}
+          <div className="grid gap-2">
+            <Label htmlFor="lottery">Lotería *</Label>
+            <Select
+              value={formData.lotteryId}
+              onValueChange={(value) => setFormData(prev => ({ ...prev, lotteryId: value }))}
+              disabled={isSubmitting}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecciona una lotería" />
+              </SelectTrigger>
+              <SelectContent>
+                {lotteries.map((lottery) => (
+                  <SelectItem key={lottery.id} value={lottery.id}>
+                    {lottery.name} - {lottery.drawTime}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Selección de Animal */}
+          <div className="grid gap-2">
+            <Label htmlFor="animal">Animal *</Label>
+            <Select
+              value={formData.animalNumber}
+              onValueChange={handleAnimalSelect}
+              disabled={isSubmitting}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecciona un animal" />
+              </SelectTrigger>
+              <SelectContent className="max-h-[200px]">
+                {ANIMALS.map((animal) => (
+                  <SelectItem key={animal.number} value={animal.number}>
+                    {animal.number} - {animal.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Fecha del Sorteo */}
+          <div className="grid gap-2">
+            <Label>Fecha del Sorteo *</Label>
+            <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "justify-start text-left font-normal",
+                    !selectedDate && "text-muted-foreground"
+                  )}
+                  disabled={isSubmitting}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {selectedDate ? (
+                    format(selectedDate, "PPP", { locale: es })
+                  ) : (
+                    <span>Selecciona una fecha</span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={handleDateSelect}
+                  disabled={(date) => date > new Date() || date < new Date("1900-01-01")}
+                  locale={es}
+                  initialFocus
+                  className="rounded-md border"
+                  classNames={{
+                    months: "flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0",
+                    month: "space-y-4",
+                    caption: "flex justify-center pt-1 relative items-center",
+                    caption_label: "text-sm font-medium",
+                    nav: "space-x-1 flex items-center",
+                    nav_button: "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100",
+                    nav_button_previous: "absolute left-1",
+                    nav_button_next: "absolute right-1",
+                    table: "w-full border-collapse space-y-1",
+                    head_row: "flex",
+                    head_cell: "text-muted-foreground rounded-md w-8 font-normal text-[0.8rem] flex items-center justify-center",
+                    row: "flex w-full mt-2",
+                    cell: "h-8 w-8 text-center text-sm p-0 relative [&:has([aria-selected])]:bg-accent [&:has([aria-selected].day-range-end)]:rounded-r-md [&:has([aria-selected].day-outside)]:bg-accent/50 first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
+                    day: "h-8 w-8 p-0 font-normal aria-selected:opacity-100 hover:bg-accent hover:text-accent-foreground",
+                    day_selected: "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
+                    day_today: "bg-accent text-accent-foreground",
+                    day_outside: "day-outside text-muted-foreground opacity-50  aria-selected:bg-accent/50 aria-selected:text-muted-foreground aria-selected:opacity-30",
+                    day_disabled: "text-muted-foreground opacity-50",
+                    day_range_middle: "aria-selected:bg-accent aria-selected:text-accent-foreground",
+                    day_hidden: "invisible"
+                  }}
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          {/* Hora del Sorteo */}
+          <div className="grid gap-2">
+            <Label htmlFor="time">Hora del Sorteo *</Label>
+            <Input
+              id="time"
+              type="time"
+              value={formData.drawTime}
+              onChange={(e) => setFormData(prev => ({ ...prev, drawTime: e.target.value }))}
+              disabled={isSubmitting}
+            />
+          </div>
+
+          {/* ¿Es Ganador? */}
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="winner"
+              checked={formData.isWinner}
+              onCheckedChange={(checked) => setFormData(prev => ({ 
+                ...prev, 
+                isWinner: checked,
+                prizeAmount: checked ? prev.prizeAmount : undefined
+              }))}
+              disabled={isSubmitting}
+            />
+            <Label htmlFor="winner">¿Es resultado ganador?</Label>
+          </div>
+
+          {/* Monto del Premio (solo si es ganador) */}
+          {formData.isWinner && (
+            <div className="grid gap-2">
+              <Label htmlFor="prize">Monto del Premio *</Label>
+              <Input
+                id="prize"
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="0.00"
+                value={formData.prizeAmount || ''}
+                onChange={(e) => setFormData(prev => ({ 
+                  ...prev, 
+                  prizeAmount: e.target.value ? parseFloat(e.target.value) : undefined 
+                }))}
+                disabled={isSubmitting}
+              />
+            </div>
+          )}
+
+          {/* Información adicional */}
+          <Alert>
+            <Info className="h-4 w-4" />
+            <AlertDescription>
+              {draw 
+                ? 'Los cambios se aplicarán inmediatamente al sorteo seleccionado'
+                : 'El sorteo se registrará con la fecha y hora especificadas'
+              }
+            </AlertDescription>
+          </Alert>
+        </div>
+
+        <DialogFooter>
+          <div className="flex items-center gap-2 flex-1">
+            <Button
+              onClick={async () => {
+                const { testConnection } = await import('../hooks/use-supabase-draws')
+                const result = await testConnection()
+                if (result) {
+                  toast.success('✅ Conexión OK: Supabase accesible')
+                } else {
+                  toast.error('❌ Conexión Fallida: revisa la consola para detalles')
+                }
+              }}
+              type="button"
+              variant="outline"
+              size="sm"
+            >
+              Test DB
+            </Button>
+          </div>
+          <Button 
+            variant="outline" 
+            onClick={() => onOpenChange(false)}
+            disabled={isSubmitting}
+          >
+            Cancelar
+          </Button>
+          <Button 
+            onClick={handleSubmit}
+            disabled={!isFormValid() || isSubmitting}
+          >
+            {isSubmitting ? 'Guardando...' : (draw ? 'Actualizar' : 'Crear')} Sorteo
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}

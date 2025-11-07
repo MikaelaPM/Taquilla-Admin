@@ -44,6 +44,7 @@ export function useSupabaseAuth() {
       if (!isValidUUID) {
         console.error('Invalid UUID format:', userId)
         setCurrentUser(null)
+        setIsLoading(false)
         return
       }
 
@@ -67,31 +68,30 @@ export function useSupabaseAuth() {
               all_permissions: userData.all_permissions || []
             }
             setCurrentUser(user)
+            setIsLoading(false)
             return
           }
         } catch (supabaseError) {
-          console.log('Usuario no encontrado en Supabase, manteniendo usuario actual')
+          console.log('Usuario no encontrado en Supabase, creando usuario temporal')
         }
       }
 
-      // Si no se encontró en Supabase y no hay usuario actual, crear uno temporal
-      if (!currentUser) {
-        const tempUser: SupabaseUser = {
-          id: userId,
+      // Si no se encontró en Supabase, crear uno temporal
+      const tempUser: SupabaseUser = {
+        id: userId,
+        name: 'Usuario Temporal',
+        email: 'temp@loteria.com',
+        is_active: true,
+        roles: [{
+          id: crypto.randomUUID ? crypto.randomUUID() : 'temp-role-uuid',
           name: 'Usuario Temporal',
-          email: 'temp@loteria.com',
-          is_active: true,
-          roles: [{
-            id: crypto.randomUUID ? crypto.randomUUID() : 'temp-role-uuid',
-            name: 'Usuario Temporal',
-            description: 'Acceso temporal',
-            permissions: ['*'],
-            is_system: false
-          }],
-          all_permissions: ['*']
-        }
-        setCurrentUser(tempUser)
+          description: 'Acceso temporal',
+          permissions: ['*'],
+          is_system: false
+        }],
+        all_permissions: ['*']
       }
+      setCurrentUser(tempUser)
       
     } catch (error) {
       console.error('Error in loadUserData:', error)
