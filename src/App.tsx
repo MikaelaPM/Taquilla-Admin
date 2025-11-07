@@ -75,8 +75,7 @@ function App() {
   } = useSupabaseApiKeys()
   
   const [users, setUsers] = useKV<User[]>("users", [])
-  // Mantener localStorage como fallback para API Keys
-  const [localApiKeys, setLocalApiKeys] = useKV<ApiKey[]>("apiKeys", [])
+  // API Keys ahora se manejan completamente por el hook useSupabaseApiKeys
 
   const { currentUser, currentUserId, isLoading, login, logout, hasPermission } = useSupabaseAuth()
   const { 
@@ -399,18 +398,7 @@ function App() {
       setEditingApiKey(undefined)
     } catch (error) {
       console.error('Error guardando API Key:', error)
-      
-      // Fallback a localStorage
-      setLocalApiKeys((current) => {
-        const currentList = current || []
-        const exists = currentList.find((a) => a.id === apiKey.id)
-        if (exists) {
-          return currentList.map((a) => (a.id === apiKey.id ? apiKey : a))
-        }
-        return [...currentList, apiKey]
-      })
-      setEditingApiKey(undefined)
-      toast.success("API Key guardada localmente")
+      toast.error("Error guardando la API Key")
     }
   }
 
@@ -426,10 +414,7 @@ function App() {
         }
       } catch (error) {
         console.error('Error eliminando API Key:', error)
-        
-        // Fallback a localStorage
-        setLocalApiKeys((current) => (current || []).filter((a) => a.id !== id))
-        toast.success("API Key eliminada localmente")
+        toast.error("Error eliminando la API Key")
       }
     }
   }
@@ -464,8 +449,8 @@ function App() {
   const currentWithdrawals = moduleWithdrawals || []
   const currentUsers = supabaseUsers || []
   const currentRoles = roles || []
-  // Priorizar API Keys de Supabase, fallback a localStorage
-  const currentApiKeys = supabaseApiKeys.length > 0 ? supabaseApiKeys : (localApiKeys || [])
+  // API Keys manejadas completamente por el hook
+  const currentApiKeys = supabaseApiKeys || []
 
   const winners = currentBets.filter((b) => b.isWinner)
   const activeBets = currentBets.filter((b) => !b.isWinner)
