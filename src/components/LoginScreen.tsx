@@ -80,16 +80,24 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 onKeyPress={handleKeyPress}
-                autoComplete="current-password"
+                autoComplete="new-password"
+                className="pr-10 [&::-ms-reveal]:hidden [&::-webkit-credentials-auto-fill-button]:hidden"
+                style={{ 
+                  backgroundImage: 'none',
+                  WebkitAppearance: 'none',
+                  MozAppearance: 'none'
+                }}
               />
               <Button
                 type="button"
                 variant="ghost"
-                size="icon"
-                className="absolute right-0 top-0 h-full px-3"
+                size="sm"
+                className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 p-0 hover:bg-muted/50 focus:outline-none transition-colors"
                 onClick={() => setShowPassword(!showPassword)}
+                tabIndex={-1}
+                title={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
               >
-                {showPassword ? <EyeSlash /> : <Eye />}
+                {showPassword ? <Eye className="h-4 w-4" /> : <EyeSlash className="h-4 w-4" />}
               </Button>
             </div>
           </div>

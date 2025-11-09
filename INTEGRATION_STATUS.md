@@ -340,7 +340,7 @@ END $$;
 - ⚠️ Vista `users_with_roles` - NECESITA SER CREADA
 - ✅ Activar/desactivar usuarios
 
-### ✅ Módulo 4: LOTERÍAS - COMPLETADO Y VERIFICADO
+### ✅ Módulo 4: Sorteos - COMPLETADO Y VERIFICADO
 - ✅ Leer loterías desde `lotteries` table
 - ✅ Crear/editar/eliminar loterías
 - ✅ Gestionar premios (tabla `prizes`)
@@ -430,7 +430,7 @@ created_at ↔ timestamp
 
 ### 🔥 MÓDULOS PENDIENTES DE INTEGRAR
 
-### Módulo 7: SORTEOS/DRAWS (Listo)
+### Módulo 7: Resultados (Listo)
 - Realizar sorteos
 - Marcar ganadores en la tabla `bets`
 - Registrar resultados en `draws`

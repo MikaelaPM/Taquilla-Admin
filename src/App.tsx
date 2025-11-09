@@ -32,7 +32,7 @@ import { useSupabaseBets } from "@/hooks/use-supabase-bets"
 import { useSupabasePots } from "@/hooks/use-supabase-pots"
 import { useSupabaseWithdrawals } from "@/hooks/use-supabase-withdrawals"
 import { useSupabaseApiKeys } from "@/hooks/use-supabase-apikeys"
-import { Plus, Ticket, Trophy, Vault, ListBullets, Calendar, Pencil, Trash, Users, ShieldCheck, SignOut, MagnifyingGlass, Funnel, ChartLine, Key, Copy, Eye, EyeSlash } from "@phosphor-icons/react"
+import { Plus, Ticket, Trophy, Vault, ListBullets, Calendar, Pencil, Trash, Users, ShieldCheck, SignOut, MagnifyingGlass, Funnel, ChartLine, Key, Copy, Eye, EyeSlash, Target } from "@phosphor-icons/react"
 import { toast } from "sonner"
 import { Toaster } from "@/components/ui/sonner"
 import { format } from "date-fns"
@@ -185,7 +185,7 @@ function App() {
       // Actualizar lotería existente
       await updateLottery(lottery.id, lottery)
     } else {
-      // Crear nueva lotería
+      // Crear nuevo sorteo
       await createLottery(lottery)
     }
     
@@ -372,6 +372,10 @@ function App() {
         }
       } else {
         // Crear nueva API Key
+        if (!currentUserId) {
+          throw new Error("Usuario no autenticado")
+        }
+        
         const { key: newKey, success } = await createSupabaseApiKey({
           name: apiKey.name,
           description: apiKey.description,
@@ -548,7 +552,7 @@ function App() {
               {hasPermission("lotteries") && (
                 <TabsTrigger value="lotteries" className="flex-shrink-0">
                   <Calendar className="md:mr-2" />
-                  <span className="hidden md:inline">Loterías</span>
+                  <span className="hidden md:inline">Sorteos</span>
                 </TabsTrigger>
               )}
               {hasPermission("bets") && (
@@ -559,8 +563,8 @@ function App() {
               )}
               {hasPermission("draws.read") && (
                 <TabsTrigger value="draws" className="flex-shrink-0">
-                  <Trophy className="md:mr-2" />
-                  <span className="hidden md:inline">Sorteos</span>
+                  <Target className="md:mr-2" />
+                  <span className="hidden md:inline">Resultados</span>
                 </TabsTrigger>
               )}
               {hasPermission("winners") && (
@@ -622,7 +626,7 @@ function App() {
             <div className="grid gap-4 md:gap-6 sm:grid-cols-2 lg:grid-cols-3">
               <Card>
                 <CardHeader>
-                  <CardTitle>Loterías Activas</CardTitle>
+                  <CardTitle>Sorteos Activos</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="text-4xl font-bold">{currentLotteries.filter((l) => l.isActive).length}</div>
@@ -671,12 +675,12 @@ function App() {
           <TabsContent value="lotteries" className="space-y-4 md:space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <h2 className="text-xl md:text-2xl font-semibold">Gestión de Loterías</h2>
-                <p className="text-muted-foreground text-sm">Crear y administrar loterías disponibles</p>
+                <h2 className="text-xl md:text-2xl font-semibold">Gestión de Sorteos</h2>
+                <p className="text-muted-foreground text-sm">Crear y administrar sorteos disponibles</p>
               </div>
               <Button onClick={() => setLotteryDialogOpen(true)} className="w-full sm:w-auto">
                 <Plus className="mr-2" />
-                Nueva Lotería
+                Nuevo Sorteo
               </Button>
             </div>
 
@@ -719,7 +723,7 @@ function App() {
                 <CardContent className="flex flex-col items-center justify-center py-12">
                   <Calendar className="h-12 w-12 text-muted-foreground mb-4" />
                   <p className="text-lg font-medium">
-                    {currentLotteries.length === 0 ? "No hay loterías creadas" : "No se encontraron loterías"}
+                    {currentLotteries.length === 0 ? "No hay sorteos creados" : "No se encontraron sorteos"}
                   </p>
                   <p className="text-muted-foreground mb-4">
                     {currentLotteries.length === 0
@@ -729,7 +733,7 @@ function App() {
                   {currentLotteries.length === 0 && (
                     <Button onClick={() => setLotteryDialogOpen(true)}>
                       <Plus className="mr-2" />
-                      Crear Primera Lotería
+                      Crear Primer Sorteo
                     </Button>
                   )}
                 </CardContent>
@@ -836,7 +840,7 @@ function App() {
                       <SelectValue placeholder="Filtrar por lotería" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Todas las loterías</SelectItem>
+                      <SelectItem value="all">Todos los sorteos</SelectItem>
                       {currentLotteries.map((lottery) => (
                         <SelectItem key={lottery.id} value={lottery.id}>
                           {lottery.name}
@@ -911,8 +915,8 @@ function App() {
           <TabsContent value="draws" className="space-y-4 md:space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <h2 className="text-xl md:text-2xl font-semibold">Gestión de Sorteos</h2>
-                <p className="text-muted-foreground text-sm">Administrar sorteos y resultados de loterías</p>
+                <h2 className="text-xl md:text-2xl font-semibold">Gestión de Resultados</h2>
+                <p className="text-muted-foreground text-sm">Administrar resultados y ganadores de sorteos</p>
               </div>
               <Button 
                 onClick={() => {
@@ -929,18 +933,18 @@ function App() {
             {/* Estadísticas de Sorteos */}
             <Card>
               <CardHeader>
-                <CardTitle>Estadísticas de Sorteos</CardTitle>
-                <CardDescription>Resumen de sorteos realizados</CardDescription>
+                <CardTitle>Estadísticas de Resultados</CardTitle>
+                <CardDescription>Resumen de resultados realizados</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="text-center">
                     <div className="text-2xl font-bold">{supabaseDraws.length}</div>
-                    <div className="text-sm text-muted-foreground">Total Sorteos</div>
+                    <div className="text-sm text-muted-foreground">Total Resultados</div>
                   </div>
                   <div className="text-center">
                     <div className="text-2xl font-bold">{supabaseDraws.filter(d => (d.winners_count || 0) > 0).length}</div>
-                    <div className="text-sm text-muted-foreground">Sorteos con Ganadores</div>
+                    <div className="text-sm text-muted-foreground">Resultados con Ganadores</div>
                   </div>
                   <div className="text-center">
                     <div className="text-2xl font-bold">
@@ -950,7 +954,7 @@ function App() {
                   </div>
                   <div className="text-center">
                     <div className="text-2xl font-bold">{supabaseLotteries.length}</div>
-                    <div className="text-sm text-muted-foreground">Loterías Activas</div>
+                    <div className="text-sm text-muted-foreground">Sorteos Activos</div>
                   </div>
                 </div>
               </CardContent>
@@ -959,14 +963,14 @@ function App() {
             {drawsLoading ? (
               <Card>
                 <CardContent className="flex items-center justify-center h-32">
-                  <p className="text-muted-foreground">Cargando sorteos...</p>
+                  <p className="text-muted-foreground">Cargando resultados...</p>
                 </CardContent>
               </Card>
             ) : (
               <Card>
                 <CardHeader>
-                  <CardTitle>Lista de Sorteos</CardTitle>
-                  <CardDescription>Todos los sorteos registrados en el sistema</CardDescription>
+                  <CardTitle>Lista de Resultados</CardTitle>
+                  <CardDescription>Todos los resultados registrados en el sistema</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
@@ -989,7 +993,7 @@ function App() {
                         <SelectValue placeholder="Filtrar por lotería" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">Todas las loterías</SelectItem>
+                        <SelectItem value="all">Todos los sorteos</SelectItem>
                         {supabaseLotteries.map((lottery) => (
                           <SelectItem key={lottery.id} value={lottery.id}>
                             {lottery.name}
@@ -1098,7 +1102,7 @@ function App() {
           <TabsContent value="winners" className="space-y-4 md:space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <h2 className="text-xl md:text-2xl font-semibold">Ganadores y Sorteos</h2>
+                <h2 className="text-xl md:text-2xl font-semibold">Ganadores y Resultados</h2>
                 <p className="text-muted-foreground text-sm">Realizar sorteos y ver ganadores</p>
               </div>
               <Button onClick={() => setDrawDialogOpen(true)} className="w-full sm:w-auto">
@@ -1110,8 +1114,8 @@ function App() {
             <div className="space-y-4 md:space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle>Sorteos Realizados</CardTitle>
-                  <CardDescription>Historial de sorteos y resultados</CardDescription>
+                  <CardTitle>Resultados Realizados</CardTitle>
+                  <CardDescription>Historial de resultados y ganadores</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
@@ -1131,10 +1135,10 @@ function App() {
                       }
                     >
                       <SelectTrigger className="w-full sm:w-[200px]">
-                        <SelectValue placeholder="Filtrar por lotería" />
+                        <SelectValue placeholder="Filtrar por sorteo" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">Todas las loterías</SelectItem>
+                        <SelectItem value="all">Todos los sorteos</SelectItem>
                         {currentLotteries.map((lottery) => (
                           <SelectItem key={lottery.id} value={lottery.id}>
                             {lottery.name}
@@ -1146,7 +1150,7 @@ function App() {
 
                   {filteredDraws.length === 0 ? (
                     <p className="text-center text-muted-foreground py-8">
-                      {currentDraws.length === 0 ? "No hay sorteos realizados" : "No se encontraron sorteos"}
+                      {currentDraws.length === 0 ? "No hay resultados realizados" : "No se encontraron resultados"}
                     </p>
                   ) : (
                     <ScrollArea className="h-[250px] md:h-[300px]">
@@ -1206,10 +1210,10 @@ function App() {
                       }
                     >
                       <SelectTrigger className="w-full sm:w-[200px]">
-                        <SelectValue placeholder="Filtrar por lotería" />
+                        <SelectValue placeholder="Filtrar por sorteo" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">Todas las loterías</SelectItem>
+                        <SelectItem value="all">Todos los sorteos</SelectItem>
                         {currentLotteries.map((lottery) => (
                           <SelectItem key={lottery.id} value={lottery.id}>
                             {lottery.name}
