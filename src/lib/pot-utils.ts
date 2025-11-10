@@ -9,17 +9,17 @@ export const POT_TYPES = {
 export const INITIAL_POTS: Pot[] = [
   {
     name: "Pote de Premios",
-    percentage: 70,
+    percentage: 60,
     balance: 0,
     color: "text-blue-600",
     description: "Para pagar premios ganadores",
   },
   {
-    name: "Pote de Reserva",
-    percentage: 20,
+    name: "Costos",
+    percentage: 30,
     balance: 0,
     color: "text-orange-600",
-    description: "Fondo de respaldo",
+    description: "Costos operativos y gastos",
   },
   {
     name: "Pote de Ganancias",

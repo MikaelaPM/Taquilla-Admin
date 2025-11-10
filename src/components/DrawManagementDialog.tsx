@@ -12,26 +12,34 @@ import { es } from "date-fns/locale"
 import { cn } from "@/lib/utils"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { SupabaseDraw, DrawFormData } from "@/hooks/use-supabase-draws"
-import { useSupabaseLotteries } from "@/hooks/use-supabase-lotteries"
-import { ANIMALS } from "@/lib/types"
+import { DrawFormData } from "@/hooks/use-supabase-draws"
+import { ANIMALS, DrawResult, Lottery } from "@/lib/types"
 import { toast } from "sonner"
 
 interface DrawManagementDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  draw?: SupabaseDraw | null
+  draw?: DrawResult | null
+  lotteries: Lottery[]
   onSave: (drawData: DrawFormData) => Promise<boolean>
 }
 
 export function DrawManagementDialog({ 
   open, 
   onOpenChange, 
-  draw, 
+  draw,
+  lotteries,
   onSave 
 }: DrawManagementDialogProps) {
-  const { lotteries } = useSupabaseLotteries()
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // Debug: Log cuando cambien las loterías
+  useEffect(() => {
+    console.log('📊 DrawManagementDialog - Loterías recibidas:', lotteries.length)
+    if (lotteries.length > 0) {
+      console.log('Primera lotería:', lotteries[0])
+    }
+  }, [lotteries])
   
   // Estados del formulario
   const [formData, setFormData] = useState<DrawFormData>({
@@ -51,8 +59,8 @@ export function DrawManagementDialog({
   useEffect(() => {
     if (open) {
       if (draw) {
-          // Modo edición (mapear desde SupabaseDraw)
-          const dt = new Date(draw.draw_time)
+          // Modo edición (mapear desde DrawResult con camelCase)
+          const dt = new Date(draw.drawTime)
           const yyyy = dt.getFullYear()
           const mm = String(dt.getMonth() + 1).padStart(2, '0')
           const dd = String(dt.getDate()).padStart(2, '0')
@@ -60,13 +68,13 @@ export function DrawManagementDialog({
           const mi = String(dt.getMinutes()).padStart(2, '0')
 
           setFormData({
-            lotteryId: draw.lottery_id,
-            animalNumber: draw.winning_animal_number,
-            animalName: draw.winning_animal_name,
+            lotteryId: draw.lotteryId,
+            animalNumber: draw.winningAnimalNumber,
+            animalName: draw.winningAnimalName,
             drawDate: `${yyyy}-${mm}-${dd}`,
             drawTime: `${hh}:${mi}`,
-            isWinner: (draw.winners_count || 0) > 0,
-            prizeAmount: draw.total_payout || undefined
+            isWinner: (draw.winnersCount || 0) > 0,
+            prizeAmount: draw.totalPayout || undefined
           })
           setSelectedDate(dt)
       } else {
@@ -159,16 +167,26 @@ export function DrawManagementDialog({
         </DialogHeader>
 
         <div className="grid gap-4 py-4">
+          {/* Mensaje si no hay loterías */}
+          {lotteries.length === 0 && (
+            <Alert>
+              <Info className="h-4 w-4" />
+              <AlertDescription>
+                No hay loterías disponibles. Por favor, crea una lotería primero en la pestaña "Loterías".
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Selección de Lotería */}
           <div className="grid gap-2">
             <Label htmlFor="lottery">Lotería *</Label>
             <Select
               value={formData.lotteryId}
               onValueChange={(value) => setFormData(prev => ({ ...prev, lotteryId: value }))}
-              disabled={isSubmitting}
+              disabled={isSubmitting || lotteries.length === 0}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Selecciona una lotería" />
+                <SelectValue placeholder={lotteries.length === 0 ? "No hay loterías disponibles" : "Selecciona una lotería"} />
               </SelectTrigger>
               <SelectContent>
                 {lotteries.map((lottery) => (

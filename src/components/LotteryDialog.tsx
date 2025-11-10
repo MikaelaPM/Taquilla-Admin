@@ -7,7 +7,13 @@ import { Lottery, Prize, ANIMALS } from "@/lib/types"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { toast } from "sonner"
-import { Trash } from "@phosphor-icons/react"
+import { Trash, Plus } from "@phosphor-icons/react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 interface LotteryDialogProps {
   open: boolean
@@ -48,14 +54,15 @@ export function LotteryDialog({ open, onOpenChange, lottery, onSave }: LotteryDi
     toast.success(lottery ? "Lotería actualizada" : "Lotería creada")
   }
 
-  const addPrize = () => {
-    const newPrize: Prize = {
-      id: Date.now().toString(),
-      animalNumber: "00",
-      multiplier: 70,
-      animalName: "Delfín",
-    }
-    setPrizes([...prizes, newPrize])
+  const addAllPrizesWithMultiplier = (multiplier: number) => {
+    const newPrizes: Prize[] = ANIMALS.map((animal) => ({
+      id: `${Date.now()}-${animal.number}`,
+      animalNumber: animal.number,
+      multiplier: multiplier,
+      animalName: animal.name,
+    }))
+    setPrizes([...prizes, ...newPrizes])
+    toast.success(`✅ ${ANIMALS.length} premios agregados con multiplicador x${multiplier}`)
   }
 
   const updatePrize = (id: string, field: keyof Prize, value: string | number) => {
@@ -147,9 +154,28 @@ export function LotteryDialog({ open, onOpenChange, lottery, onSave }: LotteryDi
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label>Premios</Label>
-              <Button type="button" variant="outline" size="sm" onClick={addPrize}>
-                Agregar Premio
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button type="button" variant="outline" size="sm">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Agregar Premio
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => addAllPrizesWithMultiplier(30)}>
+                    <div className="flex flex-col">
+                      <span className="font-medium">Todos los animalitos x30</span>
+                      <span className="text-xs text-muted-foreground">Agrega los 37 animales con multiplicador x30</span>
+                    </div>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => addAllPrizesWithMultiplier(40)}>
+                    <div className="flex flex-col">
+                      <span className="font-medium">Todos los animalitos x40</span>
+                      <span className="text-xs text-muted-foreground">Agrega los 37 animales con multiplicador x40</span>
+                    </div>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
 
             <div className="space-y-2">

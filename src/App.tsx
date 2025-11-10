@@ -43,7 +43,7 @@ import { Separator } from "@/components/ui/separator"
 import { Label } from "@/components/ui/label"
 
 function App() {
-  const [draws, setDraws] = useKV<DrawResult[]>("draws", [])
+  // Ya no usamos useKV para draws, ahora usamos useSupabaseDraws
   
   const { 
     pots, 
@@ -245,8 +245,57 @@ function App() {
     return success
   }
 
+  // Función para procesar ganadores automáticamente después de crear un sorteo
+  const processWinnersAutomatically = async (drawData: any) => {
+    try {
+      console.log('🎯 Procesando ganadores automáticamente...')
+      console.log('Animal ganador:', drawData.animalNumber, drawData.animalName)
+      
+      // Buscar todas las jugadas que apostaron al animal ganador de esta lotería
+      const winningBets = currentBets.filter(bet => 
+        bet.lotteryId === drawData.lotteryId &&
+        bet.animalNumber === drawData.animalNumber &&
+        !bet.isWinner // Solo las que aún no han ganado
+      )
+
+      console.log(`📊 Encontradas ${winningBets.length} jugadas ganadoras`)
+
+      if (winningBets.length === 0) {
+        toast.info('Sorteo creado. No hay jugadas ganadoras para este animal.')
+        return { winnersCount: 0, totalPayout: 0 }
+      }
+
+      // Calcular total a pagar
+      const totalPayout = winningBets.reduce((sum, bet) => sum + bet.potentialWin, 0)
+      console.log(`💰 Total a pagar: Bs. ${totalPayout}`)
+
+      // Marcar todas las jugadas como ganadoras
+      for (const bet of winningBets) {
+        await updateBet(bet.id, { isWinner: true })
+        console.log(`✅ Jugada ${bet.id} marcada como ganadora - Premio: Bs. ${bet.potentialWin}`)
+      }
+
+      // Descontar del pote de premios
+      if (totalPayout > 0) {
+        await deductFromPot("Pote de Premios", totalPayout)
+        console.log(`💸 Descontado Bs. ${totalPayout} del Pote de Premios`)
+      }
+
+      toast.success(`🎉 ${winningBets.length} ganador${winningBets.length !== 1 ? 'es' : ''} registrado${winningBets.length !== 1 ? 's' : ''} automáticamente!`, {
+        description: `Total pagado: Bs. ${totalPayout.toFixed(2)}`
+      })
+
+      return { winnersCount: winningBets.length, totalPayout }
+    } catch (error) {
+      console.error('Error procesando ganadores:', error)
+      toast.error('Error al procesar ganadores automáticamente')
+      return { winnersCount: 0, totalPayout: 0 }
+    }
+  }
+
   const handleDraw = async (result: DrawResult, winners: Bet[]) => {
-    setDraws((current) => [...(current || []), result])
+    // Ya no usamos setDraws, el hook useSupabaseDraws se encarga de todo
+    // La función createDraw del hook ya actualiza el estado automáticamente
 
     // Marcar ganadores usando el hook de Supabase
     if (winners.length > 0) {
@@ -448,7 +497,7 @@ function App() {
   const currentBets = supabaseBets || []
   const currentPots = pots || INITIAL_POTS
   const currentLotteries = supabaseLotteries || []
-  const currentDraws = draws || []
+  const currentDraws = supabaseDraws || []
   const currentTransfers = transfers || []
   const currentWithdrawals = moduleWithdrawals || []
   const currentUsers = supabaseUsers || []
@@ -655,7 +704,7 @@ function App() {
             {currentPots[0].balance < 10000 && (
               <Alert>
                 <AlertDescription>
-                  El pote de premios está bajo. Considere transferir fondos desde la reserva.
+                  El pote de premios está bajo. Considere transferir fondos desde costos o ganancias.
                 </AlertDescription>
               </Alert>
             )}
@@ -943,12 +992,12 @@ function App() {
                     <div className="text-sm text-muted-foreground">Total Resultados</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-bold">{supabaseDraws.filter(d => (d.winners_count || 0) > 0).length}</div>
+                    <div className="text-2xl font-bold">{supabaseDraws.filter(d => (d.winnersCount || 0) > 0).length}</div>
                     <div className="text-sm text-muted-foreground">Resultados con Ganadores</div>
                   </div>
                   <div className="text-center">
                     <div className="text-2xl font-bold">
-                      {formatCurrency(supabaseDraws.reduce((sum, d) => sum + (d.total_payout || 0), 0))}
+                      {formatCurrency(supabaseDraws.reduce((sum, d) => sum + (d.totalPayout || 0), 0))}
                     </div>
                     <div className="text-sm text-muted-foreground">Total Pagado</div>
                   </div>
@@ -1021,45 +1070,45 @@ function App() {
                           {supabaseDraws
                             .filter((draw) => {
                               if (drawSearch) {
-                                const lottery = supabaseLotteries.find(l => l.id === draw.lottery_id)
+                                const lottery = supabaseLotteries.find(l => l.id === draw.lotteryId)
                                 const lotteryName = lottery?.name || ''
                                 const searchLower = drawSearch.toLowerCase()
                                 if (
                                   !lotteryName.toLowerCase().includes(searchLower) &&
-                                  !draw.winning_animal_name.toLowerCase().includes(searchLower) &&
-                                  !draw.winning_animal_number.includes(searchLower) &&
-                                  !draw.draw_time.toLowerCase().includes(searchLower)
+                                  !draw.winningAnimalName.toLowerCase().includes(searchLower) &&
+                                  !draw.winningAnimalNumber.includes(searchLower) &&
+                                  !draw.drawTime.toLowerCase().includes(searchLower)
                                 ) {
                                   return false
                                 }
                               }
-                              if (drawFilters.lotteryId && draw.lottery_id !== drawFilters.lotteryId) {
+                              if (drawFilters.lotteryId && draw.lotteryId !== drawFilters.lotteryId) {
                                 return false
                               }
                               return true
                             })
                             .map((draw) => {
-                              const lottery = supabaseLotteries.find(l => l.id === draw.lottery_id)
+                              const lottery = supabaseLotteries.find(l => l.id === draw.lotteryId)
                               return (
                                 <TableRow key={draw.id}>
                                   <TableCell className="font-medium">
-                                    {format(new Date(draw.draw_time), 'dd/MM/yyyy')}
+                                    {format(new Date(draw.drawTime), 'dd/MM/yyyy')}
                                   </TableCell>
-                                  <TableCell>{format(new Date(draw.draw_time), 'HH:mm')}</TableCell>
-                                  <TableCell>{lottery?.name || draw.lottery_name || 'N/A'}</TableCell>
+                                  <TableCell>{format(new Date(draw.drawTime), 'HH:mm')}</TableCell>
+                                  <TableCell>{lottery?.name || draw.lotteryName || 'N/A'}</TableCell>
                                   <TableCell>
                                     <span className="font-mono">
-                                      {draw.winning_animal_number} - {draw.winning_animal_name}
+                                      {draw.winningAnimalNumber} - {draw.winningAnimalName}
                                     </span>
                                   </TableCell>
                                   <TableCell>
-                                    <Badge variant={(draw.winners_count || 0) > 0 ? "default" : "outline"}>
-                                      {(draw.winners_count || 0) > 0 ? "Con ganadores" : "Sin ganadores"}
+                                    <Badge variant={(draw.winnersCount || 0) > 0 ? "default" : "outline"}>
+                                      {(draw.winnersCount || 0) > 0 ? "Con ganadores" : "Sin ganadores"}
                                     </Badge>
                                   </TableCell>
                                   <TableCell>
-                                    {(draw.total_payout || 0) > 0
-                                      ? formatCurrency(draw.total_payout)
+                                    {(draw.totalPayout || 0) > 0
+                                      ? formatCurrency(draw.totalPayout)
                                       : "-"}
                                   </TableCell>
                                   <TableCell>
@@ -1849,11 +1898,25 @@ function App() {
           if (!open) setEditingDraw(undefined)
         }}
         draw={editingDraw}
+        lotteries={supabaseLotteries}
         onSave={async (drawData) => {
           if (editingDraw) {
+            // Actualizar sorteo existente
             return await updateDraw(editingDraw.id, drawData)
           } else {
-            return await createDraw(drawData)
+            // Crear nuevo sorteo
+            const success = await createDraw(drawData)
+            
+            if (success) {
+              // Procesar ganadores automáticamente
+              const { winnersCount, totalPayout } = await processWinnersAutomatically(drawData)
+              
+              // Actualizar el sorteo con la información de ganadores y premios
+              // (El sorteo ya fue creado, solo actualizamos estos campos)
+              console.log(`✅ Sorteo creado con ${winnersCount} ganadores y Bs. ${totalPayout} en premios`)
+            }
+            
+            return success
           }
         }}
       />

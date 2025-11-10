@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Forzar Recarga de Sorteos</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .card {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 { color: #333; margin-bottom: 20px; }
+        button {
+            background: #4F46E5;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px 5px;
+            font-weight: 600;
+        }
+        button:hover { background: #4338CA; }
+        .danger { background: #DC2626; }
+        .danger:hover { background: #B91C1C; }
+        .success { background: #10B981; }
+        .success:hover { background: #059669; }
+        pre {
+            background: #1F2937;
+            color: #10B981;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 20px 0;
+        }
+        .status {
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 8px;
+            font-weight: 500;
+        }
+        .info { background: #DBEAFE; color: #1E40AF; }
+        .warning { background: #FEF3C7; color: #92400E; }
+        .error { background: #FEE2E2; color: #991B1B; }
+        .ok { background: #D1FAE5; color: #065F46; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>🎰 Forzar Recarga de Sorteos</h1>
+        
+        <div id="status" class="status info">
+            Verificando estado...
+        </div>
+        
+        <div style="margin: 20px 0;">
+            <button onclick="step1()">📝 Paso 1: Limpiar localStorage</button>
+            <button onclick="step2()" class="success">🔄 Paso 2: Forzar Recarga</button>
+            <button onclick="step3()" class="danger">🧹 Paso 3: Hard Refresh</button>
+        </div>
+        
+        <h3>Estado del localStorage:</h3>
+        <pre id="localStorageInfo">Cargando...</pre>
+        
+        <h3>Instrucciones Manuales:</h3>
+        <div class="status warning">
+            Si los botones no funcionan, sigue estos pasos:
+            <ol style="margin-top: 10px;">
+                <li>Presiona <strong>Ctrl+Shift+Delete</strong> (Windows/Linux) o <strong>Cmd+Shift+Delete</strong> (Mac)</li>
+                <li>Marca solo "Cookies y datos de sitios"</li>
+                <li>Selecciona "Última hora"</li>
+                <li>Haz clic en "Borrar datos"</li>
+                <li>Recarga la aplicación con <strong>Ctrl+Shift+R</strong> (hard refresh)</li>
+            </ol>
+        </div>
+    </div>
+    
+    <script>
+        function updateStatus() {
+            const draws = localStorage.getItem('supabase_draws_backup_v2');
+            const pots = localStorage.getItem('supabase_pots_backup_v2');
+            
+            let info = '';
+            if (draws) {
+                const parsedDraws = JSON.parse(draws);
+                info += `✅ Sorteos en cache: ${parsedDraws.length} registros\n`;
+                info += `   Último: ${parsedDraws[0]?.lottery_name || 'N/A'}\n\n`;
+            } else {
+                info += `❌ No hay sorteos en localStorage\n\n`;
+            }
+            
+            if (pots) {
+                const parsedPots = JSON.parse(pots);
+                info += `✅ Potes en cache: ${parsedPots.length} registros\n`;
+            } else {
+                info += `❌ No hay potes en localStorage\n`;
+            }
+            
+            document.getElementById('localStorageInfo').textContent = info;
+            
+            // Actualizar estado
+            const statusDiv = document.getElementById('status');
+            if (!draws) {
+                statusDiv.className = 'status error';
+                statusDiv.textContent = '❌ No hay sorteos en cache. La aplicación debe cargarlos desde Supabase.';
+            } else {
+                statusDiv.className = 'status ok';
+                statusDiv.textContent = `✅ Hay ${JSON.parse(draws).length} sorteos en cache.`;
+            }
+        }
+        
+        function step1() {
+            console.log('🗑️ Limpiando localStorage...');
+            localStorage.removeItem('supabase_draws_backup_v2');
+            localStorage.removeItem('draws_lastSync');
+            
+            document.getElementById('status').className = 'status ok';
+            document.getElementById('status').textContent = '✅ Paso 1 completado: localStorage limpiado';
+            
+            updateStatus();
+            
+            alert('✅ localStorage limpiado.\n\nAhora haz clic en "Paso 2: Forzar Recarga"');
+        }
+        
+        function step2() {
+            console.log('🔄 Forzando recarga...');
+            document.getElementById('status').className = 'status info';
+            document.getElementById('status').textContent = '🔄 Recargando aplicación...';
+            
+            setTimeout(() => {
+                window.location.reload(true);
+            }, 1000);
+        }
+        
+        function step3() {
+            console.log('🧹 Hard refresh...');
+            
+            // Limpiar TODO
+            localStorage.clear();
+            sessionStorage.clear();
+            
+            document.getElementById('status').className = 'status warning';
+            document.getElementById('status').textContent = '🧹 Todo limpiado. Recargando...';
+            
+            setTimeout(() => {
+                // Forzar hard refresh
+                window.location.href = window.location.href.split('?')[0] + '?t=' + Date.now();
+            }, 1000);
+        }
+        
+        // Actualizar al cargar
+        updateStatus();
+        
+        // Auto-actualizar cada 2 segundos
+        setInterval(updateStatus, 2000);
+    </script>
+</body>
+</html>

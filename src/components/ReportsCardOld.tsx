@@ -18,7 +18,7 @@ import {
   Trophy, 
   ChartBar, 
   Download, 
-  ArrowsClockwise,
+  Refresh,
   CloudArrowUp,
   Archive 
 } from "@phosphor-icons/react"
@@ -60,7 +60,6 @@ export function ReportsCard({ bets, draws, lotteries }: ReportsCardProps) {
   const weekStart = startOfWeek(now, { weekStartsOn: 1 })
   const monthStart = startOfMonth(now)
 
-  // Funciones helper
   const calculateStats = (filteredBets: Bet[], filteredDraws: DrawResult[]): SalesStats => {
     const totalSales = filteredBets.reduce((sum, bet) => sum + bet.amount, 0)
     const totalBets = filteredBets.length
@@ -70,68 +69,6 @@ export function ReportsCard({ bets, draws, lotteries }: ReportsCardProps) {
     const winners = filteredBets.filter((b) => b.isWinner).length
 
     return { totalSales, totalBets, averageBet, totalPayout, netProfit, winners }
-  }
-
-  const getTopLotteries = (betsData: Bet[]) => {
-    const lotteryStats = new Map<string, { name: string; sales: number; bets: number }>()
-
-    betsData.forEach((bet) => {
-      const current = lotteryStats.get(bet.lotteryId) || { name: bet.lotteryName, sales: 0, bets: 0 }
-      lotteryStats.set(bet.lotteryId, {
-        name: bet.lotteryName,
-        sales: current.sales + bet.amount,
-        bets: current.bets + 1,
-      })
-    })
-
-    return Array.from(lotteryStats.values())
-      .sort((a, b) => b.sales - a.sales)
-      .slice(0, 5)
-  }
-
-  const getTopAnimals = (betsData: Bet[]) => {
-    const animalStats = new Map<string, { name: string; bets: number; amount: number }>()
-
-    betsData.forEach((bet) => {
-      const key = `${bet.animalNumber}-${bet.animalName}`
-      const current = animalStats.get(key) || { name: bet.animalName, bets: 0, amount: 0 }
-      animalStats.set(key, {
-        name: bet.animalName,
-        bets: current.bets + 1,
-        amount: current.amount + bet.amount,
-      })
-    })
-
-    return Array.from(animalStats.entries())
-      .sort((a, b) => b[1].bets - a[1].bets)
-      .slice(0, 10)
-      .map(([key, value]) => ({ number: key.split("-")[0], ...value }))
-  }
-
-  const getHourlyData = (betsData: Bet[]) => {
-    const hourlyData = new Map<number, { bets: number; sales: number }>()
-
-    betsData.forEach((bet) => {
-      const hour = new Date(bet.timestamp).getHours()
-      const current = hourlyData.get(hour) || { bets: 0, sales: 0 }
-      hourlyData.set(hour, {
-        bets: current.bets + 1,
-        sales: current.sales + bet.amount,
-      })
-    })
-
-    return Array.from(hourlyData.entries())
-      .sort((a, b) => a[0] - b[0])
-      .map(([hour, data]) => ({
-        hour: `${hour.toString().padStart(2, "0")}:00`,
-        ...data,
-      }))
-  }
-
-  const getTrendIcon = (current: number, previous: number) => {
-    if (current > previous) return <TrendUp className="text-accent" weight="bold" />
-    if (current < previous) return <TrendDown className="text-destructive" weight="bold" />
-    return <Minus className="text-muted-foreground" />
   }
 
   // Obtener datos del reporte seleccionado o calcular en tiempo real
@@ -233,6 +170,63 @@ export function ReportsCard({ bets, draws, lotteries }: ReportsCardProps) {
     return reports.filter(r => r.type === selectedReportType)
   }, [reports, selectedReportType])
 
+  // Funciones helper movidas dentro del useMemo para evitar duplicación
+  const getTopLotteries = (betsData: Bet[]) => {
+    const lotteryStats = new Map<string, { name: string; sales: number; bets: number }>()
+
+    betsData.forEach((bet) => {
+      const current = lotteryStats.get(bet.lotteryId) || { name: bet.lotteryName, sales: 0, bets: 0 }
+      lotteryStats.set(bet.lotteryId, {
+        name: bet.lotteryName,
+        sales: current.sales + bet.amount,
+        bets: current.bets + 1,
+      })
+    })
+
+    return Array.from(lotteryStats.values())
+      .sort((a, b) => b.sales - a.sales)
+      .slice(0, 5)
+  }
+
+  const getTopAnimals = (betsData: Bet[]) => {
+    const animalStats = new Map<string, { name: string; bets: number; amount: number }>()
+
+    betsData.forEach((bet) => {
+      const key = `${bet.animalNumber}-${bet.animalName}`
+      const current = animalStats.get(key) || { name: bet.animalName, bets: 0, amount: 0 }
+      animalStats.set(key, {
+        name: bet.animalName,
+        bets: current.bets + 1,
+        amount: current.amount + bet.amount,
+      })
+    })
+
+    return Array.from(animalStats.entries())
+      .sort((a, b) => b[1].bets - a[1].bets)
+      .slice(0, 10)
+      .map(([key, value]) => ({ number: key.split("-")[0], ...value }))
+  }
+
+  const getHourlyData = (betsData: Bet[]) => {
+    const hourlyData = new Map<number, { bets: number; sales: number }>()
+
+    betsData.forEach((bet) => {
+      const hour = new Date(bet.timestamp).getHours()
+      const current = hourlyData.get(hour) || { bets: 0, sales: 0 }
+      hourlyData.set(hour, {
+        bets: current.bets + 1,
+        sales: current.sales + bet.amount,
+      })
+    })
+
+    return Array.from(hourlyData.entries())
+      .sort((a, b) => a[0] - b[0])
+      .map(([hour, data]) => ({
+        hour: `${hour.toString().padStart(2, "0")}:00`,
+        ...data,
+      }))
+  }
+
   if (!currentReportData) {
     return (
       <div className="space-y-4 md:space-y-6">
@@ -247,8 +241,26 @@ export function ReportsCard({ bets, draws, lotteries }: ReportsCardProps) {
     )
   }
 
-  const { todayStats, weekStats, monthStats, allTimeStats, topLotteries, topAnimals, hourlyData, trends, isFromCache, report } = currentReportData
-  const peakHour = hourlyData?.length > 0 ? hourlyData.reduce((max, curr) => (curr.bets > max.bets ? curr : max)) : null
+  const { 
+    todayStats: currentTodayStats, 
+    weekStats: currentWeekStats, 
+    monthStats: currentMonthStats, 
+    allTimeStats: currentAllTimeStats, 
+    topLotteries: currentTopLotteries, 
+    topAnimals: currentTopAnimals, 
+    hourlyData: currentHourlyData, 
+    trends: currentTrends, 
+    isFromCache, 
+    report 
+  } = currentReportData
+
+  const peakHour = currentHourlyData?.length > 0 ? currentHourlyData.reduce((max, curr) => (curr.bets > max.bets ? curr : max)) : null
+
+  const getTrendIcon = (current: number, previous: number) => {
+    if (current > previous) return <TrendUp className="text-accent" weight="bold" />
+    if (current < previous) return <TrendDown className="text-destructive" weight="bold" />
+    return <Minus className="text-muted-foreground" />
+  }
 
   return (
     <div className="space-y-4 md:space-y-6">
@@ -306,7 +318,7 @@ export function ReportsCard({ bets, draws, lotteries }: ReportsCardProps) {
                 {isGeneratingReport ? 'Generando...' : 'Generar'}
               </Button>
               <Button variant="outline" size="sm" onClick={handleSync}>
-                <ArrowsClockwise size={16} className="mr-2" />
+                <Refresh size={16} className="mr-2" />
                 Sincronizar
               </Button>
             </>
@@ -335,13 +347,13 @@ export function ReportsCard({ bets, draws, lotteries }: ReportsCardProps) {
                   Supabase
                 </Badge>
               )}
-              {trends && (
+              {currentTrends && (
                 <div className="ml-auto flex items-center gap-3 text-xs">
                   <span className="flex items-center gap-1">
-                    Ventas: {getTrendIcon(trends.salesTrend, 0)} {trends.salesTrend.toFixed(1)}%
+                    Ventas: {getTrendIcon(currentTrends.salesTrend, 0)} {currentTrends.salesTrend.toFixed(1)}%
                   </span>
                   <span className="flex items-center gap-1">
-                    Jugadas: {getTrendIcon(trends.betsTrend, 0)} {trends.betsTrend.toFixed(1)}%
+                    Jugadas: {getTrendIcon(currentTrends.betsTrend, 0)} {currentTrends.betsTrend.toFixed(1)}%
                   </span>
                 </div>
               )}
@@ -357,7 +369,6 @@ export function ReportsCard({ bets, draws, lotteries }: ReportsCardProps) {
           </CardContent>
         </Card>
       )}
-
       <div className="grid gap-3 md:gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="pb-3">
@@ -366,9 +377,9 @@ export function ReportsCard({ bets, draws, lotteries }: ReportsCardProps) {
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-2 text-xs md:text-sm">
-              {!isFromCache && getTrendIcon(todayStats.totalSales, weekStats.totalSales / 7)}
+              {getTrendIcon(todayStats.totalSales, weekStats.totalSales / 7)}
               <span className="text-muted-foreground truncate">
-                {!isFromCache ? `vs promedio semanal (${formatCurrency(weekStats.totalSales / 7)})` : 'Del período seleccionado'}
+                vs promedio semanal ({formatCurrency(weekStats.totalSales / 7)})
               </span>
             </div>
           </CardContent>
@@ -381,9 +392,9 @@ export function ReportsCard({ bets, draws, lotteries }: ReportsCardProps) {
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-2 text-xs md:text-sm">
-              {!isFromCache && getTrendIcon(todayStats.totalBets, weekStats.totalBets / 7)}
+              {getTrendIcon(todayStats.totalBets, weekStats.totalBets / 7)}
               <span className="text-muted-foreground truncate">
-                {!isFromCache ? `vs promedio semanal (${Math.round(weekStats.totalBets / 7)})` : 'Del período seleccionado'}
+                vs promedio semanal ({Math.round(weekStats.totalBets / 7)})
               </span>
             </div>
           </CardContent>
@@ -391,7 +402,7 @@ export function ReportsCard({ bets, draws, lotteries }: ReportsCardProps) {
 
         <Card>
           <CardHeader className="pb-3">
-            <CardDescription className="text-xs md:text-sm">Premios Pagados</CardDescription>
+            <CardDescription className="text-xs md:text-sm">Premios Pagados Hoy</CardDescription>
             <CardTitle className="text-2xl md:text-3xl tabular-nums">{formatCurrency(todayStats.totalPayout)}</CardTitle>
           </CardHeader>
           <CardContent>
@@ -403,7 +414,7 @@ export function ReportsCard({ bets, draws, lotteries }: ReportsCardProps) {
 
         <Card>
           <CardHeader className="pb-3">
-            <CardDescription className="text-xs md:text-sm">Ganancia Neta</CardDescription>
+            <CardDescription className="text-xs md:text-sm">Ganancia Neta Hoy</CardDescription>
             <CardTitle className="text-2xl md:text-3xl tabular-nums">{formatCurrency(todayStats.netProfit)}</CardTitle>
           </CardHeader>
           <CardContent>
@@ -416,146 +427,144 @@ export function ReportsCard({ bets, draws, lotteries }: ReportsCardProps) {
         </Card>
       </div>
 
-      {!isFromCache && (
-        <div className="grid gap-4 md:gap-6 lg:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>Resumen por Período</CardTitle>
-              <CardDescription>Comparativa de ventas y premios</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Hoy</span>
-                    <Badge>{todayStats.totalBets} jugadas</Badge>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Ventas:</span>
-                      <span className="font-medium tabular-nums">{formatCurrency(todayStats.totalSales)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Premios:</span>
-                      <span className="font-medium tabular-nums">{formatCurrency(todayStats.totalPayout)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Neto:</span>
-                      <span className="font-semibold tabular-nums text-accent">
-                        {formatCurrency(todayStats.netProfit)}
-                      </span>
-                    </div>
-                  </div>
+      <div className="grid gap-4 md:gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Resumen por Período</CardTitle>
+            <CardDescription>Comparativa de ventas y premios</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Hoy</span>
+                  <Badge>{todayStats.totalBets} jugadas</Badge>
                 </div>
-
-                <Separator />
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Esta Semana</span>
-                    <Badge variant="secondary">{weekStats.totalBets} jugadas</Badge>
+                <div className="space-y-1">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Ventas:</span>
+                    <span className="font-medium tabular-nums">{formatCurrency(todayStats.totalSales)}</span>
                   </div>
-                  <div className="space-y-1">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Ventas:</span>
-                      <span className="font-medium tabular-nums">{formatCurrency(weekStats.totalSales)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Premios:</span>
-                      <span className="font-medium tabular-nums">{formatCurrency(weekStats.totalPayout)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Neto:</span>
-                      <span className="font-semibold tabular-nums text-accent">
-                        {formatCurrency(weekStats.netProfit)}
-                      </span>
-                    </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Premios:</span>
+                    <span className="font-medium tabular-nums">{formatCurrency(todayStats.totalPayout)}</span>
                   </div>
-                </div>
-
-                <Separator />
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Este Mes</span>
-                    <Badge variant="outline">{monthStats.totalBets} jugadas</Badge>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Ventas:</span>
-                      <span className="font-medium tabular-nums">{formatCurrency(monthStats.totalSales)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Premios:</span>
-                      <span className="font-medium tabular-nums">{formatCurrency(monthStats.totalPayout)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Neto:</span>
-                      <span className="font-semibold tabular-nums text-accent">
-                        {formatCurrency(monthStats.netProfit)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <Separator />
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Total Acumulado</span>
-                    <Badge variant="outline">{allTimeStats.totalBets} jugadas</Badge>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Ventas:</span>
-                      <span className="font-medium tabular-nums">{formatCurrency(allTimeStats.totalSales)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Premios:</span>
-                      <span className="font-medium tabular-nums">{formatCurrency(allTimeStats.totalPayout)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Neto:</span>
-                      <span className="font-semibold tabular-nums text-accent">
-                        {formatCurrency(allTimeStats.netProfit)}
-                      </span>
-                    </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Neto:</span>
+                    <span className="font-semibold tabular-nums text-accent">
+                      {formatCurrency(todayStats.netProfit)}
+                    </span>
                   </div>
                 </div>
               </div>
-            </CardContent>
-          </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Loterías Más Vendidas</CardTitle>
-              <CardDescription>Ranking por volumen de ventas</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {topLotteries.length === 0 ? (
-                <p className="text-center text-muted-foreground py-8">No hay datos de ventas</p>
-              ) : (
-                <ScrollArea className="h-[300px] md:h-[400px]">
-                  <div className="space-y-3">
-                    {topLotteries.map((lottery, index) => (
-                      <div key={lottery.name} className="flex items-center gap-3">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground font-semibold text-sm">
-                          {index + 1}
-                        </div>
-                        <div className="flex-1 space-y-1">
-                          <p className="text-sm font-medium leading-none">{lottery.name}</p>
-                          <p className="text-xs text-muted-foreground">{lottery.bets} jugadas</p>
-                        </div>
-                        <p className="font-semibold tabular-nums">{formatCurrency(lottery.sales)}</p>
-                      </div>
-                    ))}
+              <Separator />
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Esta Semana</span>
+                  <Badge variant="secondary">{weekStats.totalBets} jugadas</Badge>
+                </div>
+                <div className="space-y-1">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Ventas:</span>
+                    <span className="font-medium tabular-nums">{formatCurrency(weekStats.totalSales)}</span>
                   </div>
-                </ScrollArea>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      )}
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Premios:</span>
+                    <span className="font-medium tabular-nums">{formatCurrency(weekStats.totalPayout)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Neto:</span>
+                    <span className="font-semibold tabular-nums text-accent">
+                      {formatCurrency(weekStats.netProfit)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Este Mes</span>
+                  <Badge variant="outline">{monthStats.totalBets} jugadas</Badge>
+                </div>
+                <div className="space-y-1">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Ventas:</span>
+                    <span className="font-medium tabular-nums">{formatCurrency(monthStats.totalSales)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Premios:</span>
+                    <span className="font-medium tabular-nums">{formatCurrency(monthStats.totalPayout)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Neto:</span>
+                    <span className="font-semibold tabular-nums text-accent">
+                      {formatCurrency(monthStats.netProfit)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Total Acumulado</span>
+                  <Badge variant="outline">{allTimeStats.totalBets} jugadas</Badge>
+                </div>
+                <div className="space-y-1">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Ventas:</span>
+                    <span className="font-medium tabular-nums">{formatCurrency(allTimeStats.totalSales)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Premios:</span>
+                    <span className="font-medium tabular-nums">{formatCurrency(allTimeStats.totalPayout)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Neto:</span>
+                    <span className="font-semibold tabular-nums text-accent">
+                      {formatCurrency(allTimeStats.netProfit)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Loterías Más Vendidas</CardTitle>
+            <CardDescription>Ranking por volumen de ventas</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {topLotteries.length === 0 ? (
+              <p className="text-center text-muted-foreground py-8">No hay datos de ventas</p>
+            ) : (
+              <ScrollArea className="h-[300px] md:h-[400px]">
+                <div className="space-y-3">
+                  {topLotteries.map((lottery, index) => (
+                    <div key={lottery.name} className="flex items-center gap-3">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground font-semibold text-sm">
+                        {index + 1}
+                      </div>
+                      <div className="flex-1 space-y-1">
+                        <p className="text-sm font-medium leading-none">{lottery.name}</p>
+                        <p className="text-xs text-muted-foreground">{lottery.bets} jugadas</p>
+                      </div>
+                      <p className="font-semibold tabular-nums">{formatCurrency(lottery.sales)}</p>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       <div className="grid gap-4 md:gap-6 lg:grid-cols-2">
         <Card>
@@ -591,12 +600,12 @@ export function ReportsCard({ bets, draws, lotteries }: ReportsCardProps) {
 
         <Card>
           <CardHeader>
-            <CardTitle>Actividad por Hora {isFromCache ? '(Del Reporte)' : '(Hoy)'}</CardTitle>
+            <CardTitle>Actividad por Hora (Hoy)</CardTitle>
             <CardDescription>Distribución de jugadas durante el día</CardDescription>
           </CardHeader>
           <CardContent>
-            {hourlyData?.length === 0 ? (
-              <p className="text-center text-muted-foreground py-8">No hay datos</p>
+            {hourlyData.length === 0 ? (
+              <p className="text-center text-muted-foreground py-8">No hay datos de hoy</p>
             ) : (
               <div className="space-y-4">
                 {peakHour && (
@@ -612,7 +621,7 @@ export function ReportsCard({ bets, draws, lotteries }: ReportsCardProps) {
                 )}
                 <ScrollArea className="h-[280px]">
                   <div className="space-y-2">
-                    {hourlyData?.map((data) => (
+                    {hourlyData.map((data) => (
                       <div key={data.hour} className="space-y-1">
                         <div className="flex items-center justify-between text-sm">
                           <span className="font-mono">{data.hour}</span>

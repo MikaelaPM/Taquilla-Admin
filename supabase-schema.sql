@@ -326,9 +326,9 @@ $$ LANGUAGE plpgsql;
 
 -- Insertar potes iniciales
 INSERT INTO pots (name, percentage, balance, color, description) VALUES
-  ('Pote de Premios', 40, 0, 'bg-accent', 'Fondos destinados a pagar premios ganadores'),
-  ('Pote de Reserva', 35, 0, 'bg-secondary', 'Reserva para contingencias y respaldo'),
-  ('Pote de Ganancias', 25, 0, 'bg-primary', 'Ganancias acumuladas del sistema')
+  ('Pote de Premios', 60, 0, 'bg-accent', 'Fondos destinados a pagar premios ganadores'),
+  ('Costos', 30, 0, 'bg-secondary', 'Costos operativos y gastos del sistema'),
+  ('Pote de Ganancias', 10, 0, 'bg-primary', 'Ganancias acumuladas del sistema')
 ON CONFLICT (name) DO NOTHING;
 
 -- Insertar roles del sistema

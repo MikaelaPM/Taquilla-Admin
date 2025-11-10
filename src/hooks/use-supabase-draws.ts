@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
+import { DrawResult } from '@/lib/types'
 
 // Estructura real según supabase-schema.sql (tabla draws)
 export interface SupabaseDraw {
@@ -14,6 +15,18 @@ export interface SupabaseDraw {
   winners_count: number
   created_at: string
 }
+
+// Función para mapear SupabaseDraw a DrawResult (camelCase)
+const mapSupabaseDrawToDrawResult = (supabaseDraw: SupabaseDraw): DrawResult => ({
+  id: supabaseDraw.id,
+  lotteryId: supabaseDraw.lottery_id,
+  lotteryName: supabaseDraw.lottery_name,
+  winningAnimalNumber: supabaseDraw.winning_animal_number,
+  winningAnimalName: supabaseDraw.winning_animal_name,
+  drawTime: supabaseDraw.draw_time,
+  totalPayout: supabaseDraw.total_payout,
+  winnersCount: supabaseDraw.winners_count
+})
 
 // Datos del formulario (lo que captura la UI)
 export interface DrawFormData {
@@ -53,7 +66,7 @@ export const testConnection = async (): Promise<boolean> => {
 }
 
 export const useSupabaseDraws = () => {
-  const [draws, setDraws] = useState<SupabaseDraw[]>([])
+  const [draws, setDraws] = useState<DrawResult[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -81,7 +94,7 @@ export const useSupabaseDraws = () => {
         }
         setError('No se pudo conectar a la base de datos. Usando datos locales.')
       } else {
-        const drawsData = data || []
+        const drawsData = (data || []).map(mapSupabaseDrawToDrawResult)
         setDraws(drawsData)
         // Guardar backup en localStorage
         localStorage.setItem('supabase_draws_backup_v2', JSON.stringify(drawsData))
@@ -140,7 +153,7 @@ export const useSupabaseDraws = () => {
       if (supabaseError) {
         console.error('Error Supabase:', supabaseError.message)
         // Agregar localmente
-        const localDraw: SupabaseDraw = {
+        const localDraw: DrawResult = mapSupabaseDrawToDrawResult({
           id: crypto.randomUUID(),
           lottery_id: payload.lottery_id,
           lottery_name: payload.lottery_name,
@@ -150,7 +163,7 @@ export const useSupabaseDraws = () => {
           total_payout: payload.total_payout,
           winners_count: payload.winners_count,
           created_at: new Date().toISOString()
-        }
+        })
         const updatedDraws = [localDraw, ...draws]
         setDraws(updatedDraws)
         localStorage.setItem('supabase_draws_backup_v2', JSON.stringify(updatedDraws))
@@ -268,13 +281,13 @@ export const useSupabaseDraws = () => {
   // Función para obtener estadísticas
   const getDrawStats = () => {
     const totalDraws = draws.length
-    const winnerDraws = draws.filter(draw => draw.winners_count > 0).length
-    const totalPrizes = draws.reduce((sum, draw) => sum + (draw.total_payout || 0), 0)
+    const winnerDraws = draws.filter(draw => draw.winnersCount > 0).length
+    const totalPrizes = draws.reduce((sum, draw) => sum + (draw.totalPayout || 0), 0)
 
     // Frecuencia de animales ganadores
     const animalFrequency: Record<string, number> = {}
     draws.forEach(draw => {
-      const key = `${draw.winning_animal_number} - ${draw.winning_animal_name}`
+      const key = `${draw.winningAnimalNumber} - ${draw.winningAnimalName}`
       animalFrequency[key] = (animalFrequency[key] || 0) + 1
     })
 
