@@ -569,6 +569,10 @@ function App() {
   const currentWithdrawals = moduleWithdrawals || []
   const currentUsers = supabaseUsers || []
   const currentRoles = roles || []
+  
+  // Debug: Log roles
+  console.log('🔍 Roles en App:', { roles, currentRoles, rolesLoading })
+  
   // API Keys manejadas completamente por el hook
   const currentApiKeys = supabaseApiKeys || []
 

@@ -66,6 +66,8 @@ export function useSupabaseRoles() {
         isSystem: role.is_system,
       }))
 
+      console.log('✅ Roles transformados desde Supabase:', transformedRoles.length, transformedRoles)
+
       // Combinar roles de Supabase con roles locales existentes
       setRoles(current => {
         const localRoles = current.filter(role => role.id.startsWith('local-'))
@@ -310,6 +312,7 @@ export function useSupabaseRoles() {
 
   // Cargar roles al montar el componente
   useEffect(() => {
+    console.log('🔧 useSupabaseRoles: Montando hook, cargando roles...')
     loadRoles()
   }, [])
 
