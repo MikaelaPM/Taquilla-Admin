@@ -33,6 +33,7 @@ import { useSupabaseBets } from "@/hooks/use-supabase-bets"
 import { useSupabasePots } from "@/hooks/use-supabase-pots"
 import { useSupabaseWithdrawals } from "@/hooks/use-supabase-withdrawals"
 import { useSupabaseApiKeys } from "@/hooks/use-supabase-apikeys"
+import { useAutoPlayTomorrow } from "@/hooks/use-auto-play-tomorrow"
 import { Plus, Ticket, Trophy, Vault, ListBullets, Calendar, Pencil, Trash, Users, ShieldCheck, SignOut, MagnifyingGlass, Funnel, ChartLine, Key, Copy, Eye, EyeSlash, Target } from "@phosphor-icons/react"
 import { toast } from "sonner"
 import { Toaster } from "@/components/ui/sonner"
@@ -128,6 +129,9 @@ function App() {
     markWinners,
     isConnected: betsConnected
   } = useSupabaseBets()
+
+  // Hook para auto-reactivación de "Juega Mañana"
+  const { onPlayTomorrowChange } = useAutoPlayTomorrow(supabaseLotteries, updateLottery)
 
   const [lotteryDialogOpen, setLotteryDialogOpen] = useState(false)
   const [editingLottery, setEditingLottery] = useState<Lottery | undefined>()
@@ -1869,6 +1873,7 @@ function App() {
         }}
         lottery={editingLottery}
         onSave={handleSaveLottery}
+        onPlayTomorrowChange={onPlayTomorrowChange}
       />
 
       <BetDialog

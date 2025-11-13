@@ -21,9 +21,10 @@ interface LotteryDialogProps {
   onOpenChange: (open: boolean) => void
   lottery?: Lottery
   onSave: (lottery: Lottery) => void
+  onPlayTomorrowChange?: (lotteryId: string, newValue: boolean) => void
 }
 
-export function LotteryDialog({ open, onOpenChange, lottery, onSave }: LotteryDialogProps) {
+export function LotteryDialog({ open, onOpenChange, lottery, onSave, onPlayTomorrowChange }: LotteryDialogProps) {
   const [name, setName] = useState(lottery?.name || "")
   const [openingTime, setOpeningTime] = useState(lottery?.openingTime || "08:00")
   const [closingTime, setClosingTime] = useState(lottery?.closingTime || "12:00")
@@ -263,7 +264,16 @@ export function LotteryDialog({ open, onOpenChange, lottery, onSave }: LotteryDi
               <Label>Juega Mañana</Label>
               <p className="text-sm text-muted-foreground">Disponible para el próximo sorteo</p>
             </div>
-            <Switch checked={playsTomorrow} onCheckedChange={setPlaysTomorrow} />
+            <Switch 
+              checked={playsTomorrow} 
+              onCheckedChange={(value) => {
+                setPlaysTomorrow(value)
+                // Notificar el cambio si hay una lotería en edición
+                if (lottery?.id && onPlayTomorrowChange) {
+                  onPlayTomorrowChange(lottery.id, value)
+                }
+              }} 
+            />
           </div>
 
           <div className="space-y-4">
