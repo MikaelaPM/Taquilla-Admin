@@ -1636,7 +1636,7 @@ function App() {
                 </div>
               ) : (
                 filteredRoles.map((role) => {
-                  const usersWithRole = currentUsers.filter((u) => u.roleIds.includes(role.id))
+                  const usersWithRole = currentUsers.filter((u) => u.roleIds && u.roleIds.includes(role.id))
                   return (
                     <Card key={role.id}>
                       <CardHeader>
@@ -1675,7 +1675,7 @@ function App() {
                       <div>
                         <p className="text-sm font-medium mb-2">Permisos:</p>
                         <div className="flex flex-wrap gap-1">
-                          {role.permissions.map((perm) => (
+                          {(role.permissions || []).map((perm) => (
                             <Badge key={perm} variant="outline" className="text-xs">
                               {perm}
                             </Badge>
