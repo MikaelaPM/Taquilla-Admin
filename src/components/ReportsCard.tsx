@@ -5,8 +5,7 @@ import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { formatCurrency } from "@/lib/pot-utils"
-import { Bet, DrawResult, Lottery } from "@/lib/types"
-import { useSupabaseReports, ReportData } from "@/hooks/use-supabase-reports"
+import { DrawResult, Lottery } from "@/lib/types"
 import { format, startOfDay, startOfWeek, startOfMonth } from "date-fns"
 import { es } from "date-fns/locale"
 import { 
@@ -14,90 +13,103 @@ import {
   TrendDown, 
   Minus, 
   Calendar, 
-  Ticket, 
   Trophy, 
   ChartBar, 
-  Download, 
-  ArrowsClockwise,
-  CloudArrowUp,
-  Archive,
-  ArrowLeft
+  Target
 } from "@phosphor-icons/react"
-import { useState, useEffect, useMemo } from "react"
-import { toast } from "sonner"
+import { useState, useMemo } from "react"
 
 interface ReportsCardProps {
-  bets: Bet[]
   draws: DrawResult[]
   lotteries: Lottery[]
 }
 
-interface SalesStats {
-  totalSales: number
-  totalBets: number
-  averageBet: number
+interface DrawsStats {
+  totalDraws: number
   totalPayout: number
-  netProfit: number
-  winners: number
+  drawsWithWinners: number
+  drawsWithoutWinners: number
+  averagePayout: number
 }
 
-export function ReportsCard({ bets, draws, lotteries }: ReportsCardProps) {
-  const [selectedReportType, setSelectedReportType] = useState<'current' | 'daily' | 'weekly' | 'monthly'>('current')
-  const [selectedReportId, setSelectedReportId] = useState<string>('')
-  const [isGeneratingReport, setIsGeneratingReport] = useState(false)
-
-  // Hook de reportes con Supabase
-  const {
-    reports,
-    isLoading: reportsLoading,
-    error: reportsError,
-    generateReport,
-    syncReportsWithSupabase,
-    clearOldReports
-  } = useSupabaseReports(bets, draws, lotteries)
+export function ReportsCard({ draws, lotteries }: ReportsCardProps) {
+  const [selectedPeriod, setSelectedPeriod] = useState<'today' | 'week' | 'month' | 'all'>('all')
 
   const now = new Date()
   const todayStart = startOfDay(now)
   const weekStart = startOfWeek(now, { weekStartsOn: 1 })
   const monthStart = startOfMonth(now)
 
-  // Funciones helper
-  const calculateStats = (filteredBets: Bet[], filteredDraws: DrawResult[]): SalesStats => {
-    const totalSales = filteredBets.reduce((sum, bet) => sum + bet.amount, 0)
-    const totalBets = filteredBets.length
-    const averageBet = totalBets > 0 ? totalSales / totalBets : 0
-    const totalPayout = filteredDraws.reduce((sum, draw) => sum + draw.totalPayout, 0)
-    const netProfit = totalSales - totalPayout
-    const winners = filteredBets.filter((b) => b.isWinner).length
+  // Filtrar sorteos por período
+  const filteredDraws = useMemo(() => {
+    return draws.filter(draw => {
+      const drawDate = new Date(draw.drawTime)
+      switch (selectedPeriod) {
+        case 'today':
+          return drawDate >= todayStart
+        case 'week':
+          return drawDate >= weekStart
+        case 'month':
+          return drawDate >= monthStart
+        default:
+          return true
+      }
+    })
+  }, [draws, selectedPeriod, todayStart, weekStart, monthStart])
 
-    return { totalSales, totalBets, averageBet, totalPayout, netProfit, winners }
-  }
+  // Calcular estadísticas
+  const stats = useMemo((): DrawsStats => {
+    const totalDraws = filteredDraws.length
+    const totalPayout = filteredDraws.reduce((sum, draw) => sum + (draw.totalPayout || 0), 0)
+    const drawsWithWinners = filteredDraws.filter(d => (d.winnersCount || 0) > 0).length
+    const drawsWithoutWinners = totalDraws - drawsWithWinners
+    const averagePayout = drawsWithWinners > 0 ? totalPayout / drawsWithWinners : 0
 
-  const getTopLotteries = (betsData: Bet[]) => {
-    const lotteryStats = new Map<string, { name: string; sales: number; bets: number }>()
+    return {
+      totalDraws,
+      totalPayout,
+      drawsWithWinners,
+      drawsWithoutWinners,
+      averagePayout
+    }
+  }, [filteredDraws])
 
-    betsData.forEach((bet) => {
-      const current = lotteryStats.get(bet.lotteryId) || { name: bet.lotteryName, sales: 0, bets: 0 }
-      lotteryStats.set(bet.lotteryId, {
-        name: bet.lotteryName,
-        sales: current.sales + bet.amount,
-        bets: current.bets + 1,
+  // Top loterías por premios pagados
+  const topLotteries = useMemo(() => {
+    const lotteryStats = new Map<string, { name: string; payout: number; draws: number }>()
+
+    filteredDraws.forEach((draw) => {
+      const current = lotteryStats.get(draw.lotteryId) || { name: draw.lotteryName, payout: 0, draws: 0 }
+      lotteryStats.set(draw.lotteryId, {
+        name: draw.lotteryName,
+        payout: current.payout + (draw.totalPayout || 0),
+        draws: current.draws + 1,
       })
     })
 
     return Array.from(lotteryStats.values())
-      .sort((a, b) => b.sales - a.sales)
+      .sort((a, b) => b.payout - a.payout)
       .slice(0, 5)
-  }
+  }, [filteredDraws])
 
-  const getTopAnimals = (betsData: Bet[]) => {
-    const animalStats = new Map<string, { name: string; bets: number; amount: number }>()
+  // Animales más ganadores
+  const topWinningAnimals = useMemo(() => {
+    const animalStats = new Map<string, { name: string; wins: number; totalPayout: number }>()
 
-    betsData.forEach((bet) => {
-      const key = `${bet.animalNumber}-${bet.animalName}`
-      const current = animalStats.get(key) || { name: bet.animalName, bets: 0, amount: 0 }
+    filteredDraws.filter(d => (d.winnersCount || 0) > 0).forEach((draw) => {
+      const key = `${draw.winningAnimalNumber}-${draw.winningAnimalName}`
+      const current = animalStats.get(key) || { name: `${draw.winningAnimalNumber} - ${draw.winningAnimalName}`, wins: 0, totalPayout: 0 }
       animalStats.set(key, {
-        name: bet.animalName,
+        name: current.name,
+        wins: current.wins + 1,
+        totalPayout: current.totalPayout + (draw.totalPayout || 0)
+      })
+    })
+
+    return Array.from(animalStats.values())
+      .sort((a, b) => b.wins - a.wins)
+      .slice(0, 5)
+  }, [filteredDraws])
         bets: current.bets + 1,
         amount: current.amount + bet.amount,
       })

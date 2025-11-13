@@ -671,12 +671,13 @@ function App() {
                   <span className="hidden md:inline">Sorteos</span>
                 </TabsTrigger>
               )}
-              {hasPermission("bets") && (
+              {/* Jugadas - Temporalmente oculta */}
+              {/* {hasPermission("bets") && (
                 <TabsTrigger value="bets" className="flex-shrink-0">
                   <Ticket className="md:mr-2" />
                   <span className="hidden md:inline">Jugadas</span>
                 </TabsTrigger>
-              )}
+              )} */}
               {hasPermission("draws.read") && (
                 <TabsTrigger value="draws" className="flex-shrink-0">
                   <Target className="md:mr-2" />
@@ -922,16 +923,13 @@ function App() {
             )}
           </TabsContent>
 
-          <TabsContent value="bets" className="space-y-4 md:space-y-6">
+          {/* Jugadas - Temporalmente oculta */}
+          {/* <TabsContent value="bets" className="space-y-4 md:space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h2 className="text-xl md:text-2xl font-semibold">Jugadas</h2>
                 <p className="text-muted-foreground text-sm">Registrar y ver jugadas de usuarios</p>
               </div>
-              <Button onClick={() => setBetDialogOpen(true)} className="w-full sm:w-auto">
-                <Plus className="mr-2" />
-                Nueva Jugada
-              </Button>
             </div>
 
             <Card>
@@ -1026,7 +1024,7 @@ function App() {
                 </ScrollArea>
               </Card>
             )}
-          </TabsContent>
+          </TabsContent> */}
 
           <TabsContent value="draws" className="space-y-4 md:space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">

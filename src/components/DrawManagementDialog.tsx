@@ -6,15 +6,16 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Calendar as CalendarIcon, Info } from "@phosphor-icons/react"
+import { Calendar as CalendarIcon, Info, Plus, Trash } from "@phosphor-icons/react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import { cn } from "@/lib/utils"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { DrawFormData } from "@/hooks/use-supabase-draws"
+import { DrawFormData, BetLimit } from "@/hooks/use-supabase-draws"
 import { ANIMALS, DrawResult, Lottery } from "@/lib/types"
 import { toast } from "sonner"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
 interface DrawManagementDialogProps {
   open: boolean
@@ -49,11 +50,18 @@ export function DrawManagementDialog({
     drawDate: format(new Date(), 'yyyy-MM-dd'),
     drawTime: '',
     isWinner: false,
-    prizeAmount: undefined
+    prizeAmount: undefined,
+    betLimits: []
   })
 
   const [datePickerOpen, setDatePickerOpen] = useState(false)
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
+  
+  // Estados para límites de apuestas
+  const [globalLimit, setGlobalLimit] = useState<string>('')
+  const [hasGlobalLimit, setHasGlobalLimit] = useState(false)
+  const [selectedAnimalForLimit, setSelectedAnimalForLimit] = useState<string>('')
+  const [animalLimitAmount, setAnimalLimitAmount] = useState<string>('')
 
   // Resetear formulario cuando se abre/cierra el diálogo
   useEffect(() => {
@@ -74,7 +82,8 @@ export function DrawManagementDialog({
             drawDate: `${yyyy}-${mm}-${dd}`,
             drawTime: `${hh}:${mi}`,
             isWinner: (draw.winnersCount || 0) > 0,
-            prizeAmount: draw.totalPayout || undefined
+            prizeAmount: draw.totalPayout || undefined,
+            betLimits: []
           })
           setSelectedDate(dt)
       } else {
@@ -87,9 +96,14 @@ export function DrawManagementDialog({
           drawDate: format(today, 'yyyy-MM-dd'),
           drawTime: '',
           isWinner: false,
-          prizeAmount: undefined
+          prizeAmount: undefined,
+          betLimits: []
         })
         setSelectedDate(today)
+        setHasGlobalLimit(false)
+        setGlobalLimit('')
+        setSelectedAnimalForLimit('')
+        setAnimalLimitAmount('')
       }
     }
   }, [open, draw])
@@ -106,6 +120,25 @@ export function DrawManagementDialog({
     }
   }
 
+  // Manejar selección de lotería
+  const handleLotterySelect = (lotteryId: string) => {
+    const lottery = lotteries.find(l => l.id === lotteryId)
+    if (lottery) {
+      // Normalizar drawTime: extraer solo HH:mm (eliminar segundos si existen)
+      let drawTime = lottery.drawTime
+      if (drawTime.includes(':')) {
+        const timeParts = drawTime.split(':')
+        drawTime = `${timeParts[0]}:${timeParts[1]}` // Solo HH:mm
+      }
+      
+      setFormData(prev => ({
+        ...prev,
+        lotteryId: lotteryId,
+        drawTime: drawTime
+      }))
+    }
+  }
+
   // Manejar cambio de fecha
   const handleDateSelect = (date: Date | undefined) => {
     if (date) {
@@ -116,6 +149,93 @@ export function DrawManagementDialog({
       }))
       setDatePickerOpen(false)
     }
+  }
+
+  // Agregar límite global
+  const handleAddGlobalLimit = () => {
+    if (!globalLimit || parseFloat(globalLimit) <= 0) {
+      toast.error('Ingrese un monto válido para el límite global')
+      return
+    }
+
+    const limits: BetLimit[] = ANIMALS.map(animal => ({
+      animalNumber: animal.number,
+      animalName: animal.name,
+      maxAmount: parseFloat(globalLimit)
+    }))
+
+    setFormData(prev => ({
+      ...prev,
+      betLimits: limits
+    }))
+
+    toast.success('Límite global aplicado a todos los animalitos')
+  }
+
+  // Agregar límite por animalito
+  const handleAddAnimalLimit = () => {
+    if (!selectedAnimalForLimit) {
+      toast.error('Seleccione un animalito')
+      return
+    }
+
+    if (!animalLimitAmount || parseFloat(animalLimitAmount) <= 0) {
+      toast.error('Ingrese un monto válido')
+      return
+    }
+
+    const animal = ANIMALS.find(a => a.number === selectedAnimalForLimit)
+    if (!animal) return
+
+    const existingLimitIndex = formData.betLimits?.findIndex(
+      l => l.animalNumber === selectedAnimalForLimit
+    )
+
+    if (existingLimitIndex !== undefined && existingLimitIndex >= 0) {
+      // Actualizar límite existente
+      const newLimits = [...(formData.betLimits || [])]
+      newLimits[existingLimitIndex] = {
+        animalNumber: animal.number,
+        animalName: animal.name,
+        maxAmount: parseFloat(animalLimitAmount)
+      }
+      setFormData(prev => ({ ...prev, betLimits: newLimits }))
+      toast.success('Límite actualizado')
+    } else {
+      // Agregar nuevo límite
+      setFormData(prev => ({
+        ...prev,
+        betLimits: [
+          ...(prev.betLimits || []),
+          {
+            animalNumber: animal.number,
+            animalName: animal.name,
+            maxAmount: parseFloat(animalLimitAmount)
+          }
+        ]
+      }))
+      toast.success('Límite agregado')
+    }
+
+    setSelectedAnimalForLimit('')
+    setAnimalLimitAmount('')
+  }
+
+  // Eliminar límite por animalito
+  const handleRemoveLimit = (animalNumber: string) => {
+    setFormData(prev => ({
+      ...prev,
+      betLimits: (prev.betLimits || []).filter(l => l.animalNumber !== animalNumber)
+    }))
+    toast.success('Límite eliminado')
+  }
+
+  // Limpiar todos los límites
+  const handleClearAllLimits = () => {
+    setFormData(prev => ({ ...prev, betLimits: [] }))
+    setHasGlobalLimit(false)
+    setGlobalLimit('')
+    toast.success('Todos los límites eliminados')
   }
 
   // Validar formulario
@@ -133,19 +253,23 @@ export function DrawManagementDialog({
   // Manejar envío del formulario
   const handleSubmit = async () => {
     if (!isFormValid()) {
+      console.log('❌ Formulario inválido:', formData)
       toast.error('Por favor completa todos los campos requeridos')
       return
     }
 
+    console.log('✅ Formulario válido, enviando:', formData)
     setIsSubmitting(true)
     try {
       const success = await onSave(formData)
       if (success) {
         onOpenChange(false)
+      } else {
+        toast.error('Error al crear el sorteo')
       }
     } catch (error) {
       console.error('Error saving draw:', error)
-      toast.error('Error al guardar el sorteo')
+      toast.error(`Error al guardar el sorteo: ${error instanceof Error ? error.message : 'Error desconocido'}`)
     } finally {
       setIsSubmitting(false)
     }
@@ -182,7 +306,7 @@ export function DrawManagementDialog({
             <Label htmlFor="lottery">Lotería *</Label>
             <Select
               value={formData.lotteryId}
-              onValueChange={(value) => setFormData(prev => ({ ...prev, lotteryId: value }))}
+              onValueChange={handleLotterySelect}
               disabled={isSubmitting || lotteries.length === 0}
             >
               <SelectTrigger>
@@ -276,17 +400,29 @@ export function DrawManagementDialog({
             </Popover>
           </div>
 
-          {/* Hora del Sorteo */}
-          <div className="grid gap-2">
-            <Label htmlFor="time">Hora del Sorteo *</Label>
-            <Input
-              id="time"
-              type="time"
-              value={formData.drawTime}
-              onChange={(e) => setFormData(prev => ({ ...prev, drawTime: e.target.value }))}
-              disabled={isSubmitting}
-            />
-          </div>
+          {/* Hora del Sorteo - Solo mostrar en modo edición */}
+          {draw && (
+            <div className="grid gap-2">
+              <Label htmlFor="time">Hora del Sorteo *</Label>
+              <Input
+                id="time"
+                type="time"
+                value={formData.drawTime}
+                onChange={(e) => setFormData(prev => ({ ...prev, drawTime: e.target.value }))}
+                disabled={isSubmitting}
+              />
+            </div>
+          )}
+
+          {/* Mostrar hora seleccionada en modo creación */}
+          {!draw && formData.drawTime && (
+            <Alert>
+              <Info className="h-4 w-4" />
+              <AlertDescription>
+                Hora del sorteo: <span className="font-semibold">{formData.drawTime}</span> (según la lotería seleccionada)
+              </AlertDescription>
+            </Alert>
+          )}
 
           {/* ¿Es Ganador? */}
           <div className="flex items-center space-x-2">

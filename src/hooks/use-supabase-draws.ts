@@ -37,6 +37,13 @@ export interface DrawFormData {
   drawTime: string // HH:mm
   isWinner: boolean // si hubo ganadores
   prizeAmount?: number | null // monto total pagado si hubo ganadores
+  betLimits?: BetLimit[] // límites de apuestas para este sorteo
+}
+
+export interface BetLimit {
+  animalNumber: string
+  animalName: string
+  maxAmount: number
 }
 
 // Función de test de conexión Supabase (fuera del hook para poder exportarla)
@@ -133,7 +140,12 @@ export const useSupabaseDraws = () => {
         lotteryName = lotData.name
       }
 
-      const isoDrawTime = new Date(`${drawData.drawDate}T${drawData.drawTime}:00`).toISOString()
+      // Normalizar drawTime: si ya incluye segundos (HH:mm:ss), usarlo tal cual, si no (HH:mm), agregar :00
+      const normalizedDrawTime = drawData.drawTime.includes(':') && drawData.drawTime.split(':').length === 3 
+        ? drawData.drawTime 
+        : `${drawData.drawTime}:00`
+      
+      const isoDrawTime = new Date(`${drawData.drawDate}T${normalizedDrawTime}`).toISOString()
 
       const payload = {
         lottery_id: drawData.lotteryId,

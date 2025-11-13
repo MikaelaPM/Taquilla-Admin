@@ -139,12 +139,18 @@ export function DrawStatsCard({ bets, draws, lotteries }: DrawStatsCardProps) {
               </Card>
             </div>
 
-            <div>
-              <div className="flex items-center justify-between mb-2">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
                 <h3 className="text-xs md:text-sm font-medium">Animalito Ganador</h3>
                 <Badge variant="default" className="text-xs">
                   {selectedDraw.winningAnimalNumber} - {selectedDraw.winningAnimalName}
                 </Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs md:text-sm font-medium">Fecha del Sorteo</h3>
+                <div className="text-xs md:text-sm font-semibold">
+                  {format(new Date(selectedDraw.drawTime), "dd/MM/yyyy HH:mm", { locale: es })}
+                </div>
               </div>
             </div>
 

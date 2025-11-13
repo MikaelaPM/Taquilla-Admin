@@ -7,6 +7,14 @@ import { Lottery, Prize, ANIMALS } from "@/lib/types"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { toast } from "sonner"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Plus, Trash } from "@phosphor-icons/react"
+
+interface BetLimit {
+  animalNumber: string
+  animalName: string
+  maxAmount: number
+}
 
 interface LotteryDialogProps {
   open: boolean
@@ -28,6 +36,13 @@ export function LotteryDialog({ open, onOpenChange, lottery, onSave }: LotteryDi
   const [animalsX40, setAnimalsX40] = useState<string[]>(
     lottery?.prizes.filter(p => p.multiplier === 40).map(p => p.animalNumber) || []
   )
+
+  // Estados para límites de apuestas
+  const [betLimits, setBetLimits] = useState<BetLimit[]>([])
+  const [globalLimit, setGlobalLimit] = useState<string>('')
+  const [hasGlobalLimit, setHasGlobalLimit] = useState(false)
+  const [selectedAnimalForLimit, setSelectedAnimalForLimit] = useState<string>('')
+  const [animalLimitAmount, setAnimalLimitAmount] = useState<string>('')
 
   const handleSave = () => {
     if (!name || !openingTime || !closingTime || !drawTime) {
@@ -108,6 +123,78 @@ export function LotteryDialog({ open, onOpenChange, lottery, onSave }: LotteryDi
 
   const clearAllX40 = () => {
     setAnimalsX40([])
+  }
+
+  // Funciones para límites de apuestas
+  const handleAddGlobalLimit = () => {
+    if (!globalLimit || parseFloat(globalLimit) <= 0) {
+      toast.error('Ingrese un monto válido para el límite global')
+      return
+    }
+
+    const limits: BetLimit[] = ANIMALS.map(animal => ({
+      animalNumber: animal.number,
+      animalName: animal.name,
+      maxAmount: parseFloat(globalLimit)
+    }))
+
+    setBetLimits(limits)
+    toast.success('Límite global aplicado a todos los animalitos')
+  }
+
+  const handleAddAnimalLimit = () => {
+    if (!selectedAnimalForLimit) {
+      toast.error('Seleccione un animalito')
+      return
+    }
+
+    if (!animalLimitAmount || parseFloat(animalLimitAmount) <= 0) {
+      toast.error('Ingrese un monto válido')
+      return
+    }
+
+    const animal = ANIMALS.find(a => a.number === selectedAnimalForLimit)
+    if (!animal) return
+
+    const existingLimitIndex = betLimits.findIndex(
+      l => l.animalNumber === selectedAnimalForLimit
+    )
+
+    if (existingLimitIndex >= 0) {
+      const newLimits = [...betLimits]
+      newLimits[existingLimitIndex] = {
+        animalNumber: animal.number,
+        animalName: animal.name,
+        maxAmount: parseFloat(animalLimitAmount)
+      }
+      setBetLimits(newLimits)
+      toast.success('Límite actualizado')
+    } else {
+      setBetLimits([
+        ...betLimits,
+        {
+          animalNumber: animal.number,
+          animalName: animal.name,
+          maxAmount: parseFloat(animalLimitAmount)
+        }
+      ])
+      toast.success('Límite agregado')
+    }
+
+    setSelectedAnimalForLimit('')
+    setAnimalLimitAmount('')
+  }
+
+  const handleRemoveLimit = (animalNumber: string) => {
+    setBetLimits(betLimits.filter(l => l.animalNumber !== animalNumber))
+    toast.success('Límite eliminado')
+  }
+
+  const handleClearAllLimits = () => {
+    setBetLimits([])
+    setHasGlobalLimit(false)
+    setGlobalLimit('')
+    toast.success('Todos los límites eliminados')
   }
 
   return (
@@ -246,6 +333,130 @@ export function LotteryDialog({ open, onOpenChange, lottery, onSave }: LotteryDi
               </p>
             </div>
           </div>
+
+          {/* Sección de Límites de Apuestas */}
+          <Card className="border-2">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Límites de Apuestas</CardTitle>
+              <CardDescription>Configure límites máximos de apuesta para esta lotería (opcional)</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Límite Global */}
+              <div className="space-y-2">
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="global-limit"
+                    checked={hasGlobalLimit}
+                    onCheckedChange={setHasGlobalLimit}
+                  />
+                  <Label htmlFor="global-limit" className="font-medium">Límite global para todos los animalitos</Label>
+                </div>
+                
+                {hasGlobalLimit && (
+                  <div className="flex gap-2 ml-6">
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="Monto máximo (Bs.)"
+                      value={globalLimit}
+                      onChange={(e) => setGlobalLimit(e.target.value)}
+                      className="flex-1"
+                    />
+                    <Button
+                      type="button"
+                      onClick={handleAddGlobalLimit}
+                      disabled={!globalLimit}
+                      size="sm"
+                    >
+                      <Plus className="mr-1 h-4 w-4" />
+                      Aplicar
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {/* Límite por Animalito */}
+              <div className="space-y-2">
+                <Label className="font-medium">Límite por animalito específico</Label>
+                <div className="flex gap-2">
+                  <Select
+                    value={selectedAnimalForLimit}
+                    onValueChange={setSelectedAnimalForLimit}
+                  >
+                    <SelectTrigger className="flex-1">
+                      <SelectValue placeholder="Selecciona un animalito" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-[200px]">
+                      {ANIMALS.map((animal) => (
+                        <SelectItem key={animal.number} value={animal.number}>
+                          {animal.number} - {animal.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="Monto máximo"
+                    value={animalLimitAmount}
+                    onChange={(e) => setAnimalLimitAmount(e.target.value)}
+                    className="w-32"
+                  />
+                  <Button
+                    type="button"
+                    onClick={handleAddAnimalLimit}
+                    disabled={!selectedAnimalForLimit || !animalLimitAmount}
+                    size="sm"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+
+              {/* Lista de Límites Configurados */}
+              {betLimits.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="font-medium">Límites configurados ({betLimits.length})</Label>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleClearAllLimits}
+                    >
+                      Limpiar todos
+                    </Button>
+                  </div>
+                  <div className="max-h-[150px] overflow-y-auto space-y-1 border rounded-md p-2">
+                    {betLimits.map((limit) => (
+                      <div
+                        key={limit.animalNumber}
+                        className="flex items-center justify-between p-2 bg-muted rounded text-sm"
+                      >
+                        <span className="font-mono">
+                          {limit.animalNumber} - {limit.animalName}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold">Bs.S {limit.maxAmount.toFixed(2)}</span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoveLimit(limit.animalNumber)}
+                            className="h-6 w-6 p-0"
+                          >
+                            <Trash className="h-3 w-3 text-destructive" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
         <DialogFooter>
