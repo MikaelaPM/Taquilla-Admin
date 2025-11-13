@@ -17,7 +17,6 @@ interface ApiKeyDialogProps {
 }
 
 const API_KEY_PERMISSIONS: { value: ApiKeyPermission; label: string; description: string }[] = [
-  { value: "create_bets", label: "Crear Jugadas", description: "Permite registrar jugadas desde el sistema externo" },
   { value: "read_lotteries", label: "Leer Loterías", description: "Acceso a consultar loterías disponibles" },
   { value: "read_draws", label: "Leer Sorteos", description: "Acceso a resultados de sorteos realizados" },
   { value: "read_winners", label: "Leer Ganadores", description: "Acceso a listado de jugadas ganadoras" },
