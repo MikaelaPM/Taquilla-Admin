@@ -20,7 +20,8 @@ import {
   Download, 
   ArrowsClockwise,
   CloudArrowUp,
-  Archive 
+  Archive,
+  ArrowLeft
 } from "@phosphor-icons/react"
 import { useState, useEffect, useMemo } from "react"
 import { toast } from "sonner"
@@ -236,6 +237,47 @@ export function ReportsCard({ bets, draws, lotteries }: ReportsCardProps) {
   if (!currentReportData) {
     return (
       <div className="space-y-4 md:space-y-6">
+        {/* Controles de reportes cuando no hay datos */}
+        <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
+          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+            <Select value={selectedReportType} onValueChange={(value: any) => {
+              setSelectedReportType(value)
+              if (value === 'current') {
+                setSelectedReportId('')
+              } else {
+                // Seleccionar automáticamente el primer reporte disponible
+                const filtered = reports.filter(r => r.type === value)
+                if (filtered.length > 0) {
+                  setSelectedReportId(filtered[0].id)
+                }
+              }
+            }}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Tipo de reporte" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="current">Vista General</SelectItem>
+                <SelectItem value="daily">Historial Diario</SelectItem>
+                <SelectItem value="weekly">Historial Semanal</SelectItem>
+                <SelectItem value="monthly">Historial Mensual</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex gap-2">
+            {selectedReportType !== 'current' && (
+              <Button variant="outline" size="sm" onClick={handleSync}>
+                <ArrowsClockwise size={16} className="mr-2" />
+                Sincronizar
+              </Button>
+            )}
+            <Button variant="outline" size="sm" onClick={handleCleanOldReports}>
+              <Archive size={16} className="mr-2" />
+              Limpiar
+            </Button>
+          </div>
+        </div>
+
         <Card>
           <CardContent className="p-6">
             <p className="text-center text-muted-foreground">
@@ -259,57 +301,32 @@ export function ReportsCard({ bets, draws, lotteries }: ReportsCardProps) {
             setSelectedReportType(value)
             if (value === 'current') {
               setSelectedReportId('')
+            } else {
+              // Seleccionar automáticamente el primer reporte disponible
+              const filtered = reports.filter(r => r.type === value)
+              if (filtered.length > 0) {
+                setSelectedReportId(filtered[0].id)
+              }
             }
           }}>
             <SelectTrigger className="w-[200px]">
               <SelectValue placeholder="Tipo de reporte" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="current">Tiempo Real</SelectItem>
-              <SelectItem value="daily">Reportes Diarios</SelectItem>
-              <SelectItem value="weekly">Reportes Semanales</SelectItem>
-              <SelectItem value="monthly">Reportes Mensuales</SelectItem>
+              <SelectItem value="current">Vista General</SelectItem>
+              <SelectItem value="daily">Historial Diario</SelectItem>
+              <SelectItem value="weekly">Historial Semanal</SelectItem>
+              <SelectItem value="monthly">Historial Mensual</SelectItem>
             </SelectContent>
           </Select>
-
-          {selectedReportType !== 'current' && (
-            <Select value={selectedReportId} onValueChange={setSelectedReportId}>
-              <SelectTrigger className="w-[300px]">
-                <SelectValue placeholder="Seleccionar reporte..." />
-              </SelectTrigger>
-              <SelectContent>
-                {filteredReports.map(report => (
-                  <SelectItem key={report.id} value={report.id}>
-                    <div className="flex items-center gap-2">
-                      <span>{report.title}</span>
-                      {report.syncedToSupabase && (
-                        <CloudArrowUp size={14} className="text-accent" />
-                      )}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
         </div>
 
         <div className="flex gap-2">
           {selectedReportType !== 'current' && (
-            <>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleGenerateReport(selectedReportType as any)}
-                disabled={isGeneratingReport}
-              >
-                <Download size={16} className="mr-2" />
-                {isGeneratingReport ? 'Generando...' : 'Generar'}
-              </Button>
-              <Button variant="outline" size="sm" onClick={handleSync}>
-                <ArrowsClockwise size={16} className="mr-2" />
-                Sincronizar
-              </Button>
-            </>
+            <Button variant="outline" size="sm" onClick={handleSync}>
+              <ArrowsClockwise size={16} className="mr-2" />
+              Sincronizar
+            </Button>
           )}
           <Button variant="outline" size="sm" onClick={handleCleanOldReports}>
             <Archive size={16} className="mr-2" />

@@ -4,6 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -144,6 +145,17 @@ function App() {
   const [apiKeyDialogOpen, setApiKeyDialogOpen] = useState(false)
   const [editingApiKey, setEditingApiKey] = useState<ApiKey | undefined>()
   const [visibleKeys, setVisibleKeys] = useState<Set<string>>(new Set())
+  const [logoutDialogOpen, setLogoutDialogOpen] = useState(false)
+  const [deleteApiKeyDialogOpen, setDeleteApiKeyDialogOpen] = useState(false)
+  const [apiKeyToDelete, setApiKeyToDelete] = useState<string | null>(null)
+  const [deleteRoleDialogOpen, setDeleteRoleDialogOpen] = useState(false)
+  const [roleToDelete, setRoleToDelete] = useState<string | null>(null)
+  const [deleteUserDialogOpen, setDeleteUserDialogOpen] = useState(false)
+  const [userToDelete, setUserToDelete] = useState<string | null>(null)
+  const [deleteDrawDialogOpen, setDeleteDrawDialogOpen] = useState(false)
+  const [drawToDelete, setDrawToDelete] = useState<any | null>(null)
+  const [deleteLotteryDialogOpen, setDeleteLotteryDialogOpen] = useState(false)
+  const [lotteryToDelete, setLotteryToDelete] = useState<string | null>(null)
 
   const [lotterySearch, setLotterySearch] = useState("")
   const [lotteryFilters, setLotteryFilters] = useState<{ isActive?: boolean; playsTomorrow?: boolean }>({})
@@ -194,8 +206,21 @@ function App() {
   }
 
   const handleDeleteLottery = async (id: string) => {
-    if (confirm("¿Está seguro de eliminar esta lotería?")) {
-      await deleteLottery(id)
+    setLotteryToDelete(id)
+    setDeleteLotteryDialogOpen(true)
+  }
+
+  const confirmDeleteLottery = async () => {
+    if (!lotteryToDelete) return
+    
+    try {
+      await deleteLottery(lotteryToDelete)
+      toast.success("Lotería eliminada exitosamente")
+      setDeleteLotteryDialogOpen(false)
+      setLotteryToDelete(null)
+    } catch (error) {
+      console.error('Error deleting lottery:', error)
+      toast.error("Error al eliminar lotería")
     }
   }
 
@@ -344,12 +369,17 @@ function App() {
       return
     }
     
-    if (confirm("¿Está seguro de eliminar este rol?")) {
-      const success = await deleteRole(id)
-      if (!success) {
-        // El error ya se maneja en el hook
-        return
-      }
+    setRoleToDelete(id)
+    setDeleteRoleDialogOpen(true)
+  }
+
+  const confirmDeleteRole = async () => {
+    if (!roleToDelete) return
+    
+    const success = await deleteRole(roleToDelete)
+    if (success) {
+      setDeleteRoleDialogOpen(false)
+      setRoleToDelete(null)
     }
   }
 
@@ -380,14 +410,41 @@ function App() {
       toast.error("No puede eliminar su propio usuario")
       return
     }
-    if (confirm("¿Está seguro de eliminar este usuario?")) {
-      try {
-        await deleteUser(id)
-        toast.success("Usuario eliminado")
-      } catch (error) {
-        console.error('Error deleting user:', error)
-        toast.error("Error al eliminar usuario")
-      }
+    
+    setUserToDelete(id)
+    setDeleteUserDialogOpen(true)
+  }
+
+  const confirmDeleteUser = async () => {
+    if (!userToDelete) return
+    
+    try {
+      await deleteUser(userToDelete)
+      toast.success("Usuario eliminado exitosamente")
+      setDeleteUserDialogOpen(false)
+      setUserToDelete(null)
+    } catch (error) {
+      console.error('Error deleting user:', error)
+      toast.error("Error al eliminar usuario")
+    }
+  }
+
+  const handleDeleteDraw = (draw: any) => {
+    setDrawToDelete(draw)
+    setDeleteDrawDialogOpen(true)
+  }
+
+  const confirmDeleteDraw = async () => {
+    if (!drawToDelete) return
+    
+    try {
+      await deleteDraw(drawToDelete.id)
+      toast.success("Sorteo eliminado exitosamente")
+      setDeleteDrawDialogOpen(false)
+      setDrawToDelete(null)
+    } catch (error) {
+      console.error('Error deleting draw:', error)
+      toast.error("Error al eliminar sorteo")
     }
   }
 
@@ -397,10 +454,13 @@ function App() {
   }
 
   const handleLogout = () => {
-    if (confirm("¿Está seguro de cerrar sesión?")) {
-      logout()
-      toast.success("Sesión cerrada")
-    }
+    setLogoutDialogOpen(true)
+  }
+
+  const confirmLogout = () => {
+    logout()
+    setLogoutDialogOpen(false)
+    toast.success("Sesión cerrada exitosamente")
   }
 
   const handleSaveApiKey = async (apiKey: ApiKey) => {
@@ -456,19 +516,26 @@ function App() {
   }
 
   const handleDeleteApiKey = async (id: string) => {
-    if (confirm("¿Está seguro de eliminar esta API Key? Los sistemas externos no podrán conectarse.")) {
-      try {
-        const success = await deleteSupabaseApiKey(id)
-        
-        if (success) {
-          toast.success("API Key eliminada exitosamente")
-        } else {
-          throw new Error("Error eliminando API Key")
-        }
-      } catch (error) {
-        console.error('Error eliminando API Key:', error)
-        toast.error("Error eliminando la API Key")
+    setApiKeyToDelete(id)
+    setDeleteApiKeyDialogOpen(true)
+  }
+
+  const confirmDeleteApiKey = async () => {
+    if (!apiKeyToDelete) return
+    
+    try {
+      const success = await deleteSupabaseApiKey(apiKeyToDelete)
+      
+      if (success) {
+        toast.success("API Key eliminada exitosamente")
+        setDeleteApiKeyDialogOpen(false)
+        setApiKeyToDelete(null)
+      } else {
+        throw new Error("Error eliminando API Key")
       }
+    } catch (error) {
+      console.error('Error eliminando API Key:', error)
+      toast.error("Error eliminando la API Key")
     }
   }
 
@@ -1126,11 +1193,7 @@ function App() {
                                       <Button
                                         variant="ghost"
                                         size="sm"
-                                        onClick={() => {
-                                          if (confirm('¿Estás seguro de que quieres eliminar este sorteo?')) {
-                                            deleteDraw(draw.id)
-                                          }
-                                        }}
+                                        onClick={() => handleDeleteDraw(draw)}
                                       >
                                         <Trash className="h-4 w-4" />
                                       </Button>
@@ -1906,6 +1969,316 @@ function App() {
         currentUserId={currentUserId}
         onSave={handleSaveApiKey}
       />
+
+      <Dialog open={logoutDialogOpen} onOpenChange={setLogoutDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <SignOut className="h-5 w-5 text-destructive" />
+              Cerrar Sesión
+            </DialogTitle>
+            <DialogDescription className="pt-2">
+              ¿Está seguro de que desea cerrar sesión? Será redirigido a la pantalla de inicio de sesión.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setLogoutDialogOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmLogout}
+              className="gap-2"
+            >
+              <SignOut className="h-4 w-4" />
+              Cerrar Sesión
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteApiKeyDialogOpen} onOpenChange={setDeleteApiKeyDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Trash className="h-5 w-5 text-destructive" />
+              Eliminar API Key
+            </DialogTitle>
+            <DialogDescription className="pt-2 space-y-2">
+              <p className="font-medium">
+                ¿Está seguro de que desea eliminar esta API Key?
+              </p>
+              <p className="text-sm">
+                Esta acción es permanente y no se puede deshacer. Los sistemas externos que utilicen esta clave no podrán conectarse y dejarán de funcionar inmediatamente.
+              </p>
+              {apiKeyToDelete && (
+                <div className="bg-muted p-3 rounded-md mt-3">
+                  <p className="text-sm font-mono">
+                    <span className="font-semibold">API Key:</span>{" "}
+                    {supabaseApiKeys.find(k => k.id === apiKeyToDelete)?.name || "Sin nombre"}
+                  </p>
+                </div>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDeleteApiKeyDialogOpen(false)
+                setApiKeyToDelete(null)
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDeleteApiKey}
+              className="gap-2"
+            >
+              <Trash className="h-4 w-4" />
+              Eliminar API Key
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteRoleDialogOpen} onOpenChange={setDeleteRoleDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Trash className="h-5 w-5 text-destructive" />
+              Eliminar Rol
+            </DialogTitle>
+            <DialogDescription className="pt-2 space-y-2">
+              <p className="font-medium">
+                ¿Está seguro de que desea eliminar este rol?
+              </p>
+              <p className="text-sm">
+                Esta acción es permanente y no se puede deshacer. Los usuarios asignados a este rol perderán sus permisos asociados.
+              </p>
+              {roleToDelete && (
+                <div className="bg-muted p-3 rounded-md mt-3">
+                  <p className="text-sm">
+                    <span className="font-semibold">Rol:</span>{" "}
+                    {roles.find(r => r.id === roleToDelete)?.name || "Desconocido"}
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    <span className="font-semibold">Usuarios:</span>{" "}
+                    {supabaseUsers.filter(u => u.roleIds?.includes(roleToDelete)).length}
+                  </p>
+                </div>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDeleteRoleDialogOpen(false)
+                setRoleToDelete(null)
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDeleteRole}
+              className="gap-2"
+            >
+              <Trash className="h-4 w-4" />
+              Eliminar Rol
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteUserDialogOpen} onOpenChange={setDeleteUserDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Trash className="h-5 w-5 text-destructive" />
+              Eliminar Usuario
+            </DialogTitle>
+            <DialogDescription className="pt-2 space-y-2">
+              <p className="font-medium">
+                ¿Está seguro de que desea eliminar este usuario?
+              </p>
+              <p className="text-sm">
+                Esta acción es permanente y no se puede deshacer. Se eliminarán todos los datos asociados a este usuario, incluyendo sus registros de actividad.
+              </p>
+              {userToDelete && (
+                <div className="bg-muted p-3 rounded-md mt-3 space-y-1">
+                  <p className="text-sm">
+                    <span className="font-semibold">Nombre:</span>{" "}
+                    {supabaseUsers.find(u => u.id === userToDelete)?.name || "Desconocido"}
+                  </p>
+                  <p className="text-sm">
+                    <span className="font-semibold">Email:</span>{" "}
+                    {supabaseUsers.find(u => u.id === userToDelete)?.email || ""}
+                  </p>
+                  <p className="text-sm">
+                    <span className="font-semibold">Roles:</span>{" "}
+                    {supabaseUsers.find(u => u.id === userToDelete)?.roleIds?.map(roleId => 
+                      roles.find(r => r.id === roleId)?.name
+                    ).filter(Boolean).join(", ") || "Ninguno"}
+                  </p>
+                </div>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDeleteUserDialogOpen(false)
+                setUserToDelete(null)
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDeleteUser}
+              className="gap-2"
+            >
+              <Trash className="h-4 w-4" />
+              Eliminar Usuario
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteDrawDialogOpen} onOpenChange={setDeleteDrawDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Trash className="h-5 w-5 text-destructive" />
+              Eliminar Sorteo
+            </DialogTitle>
+            <DialogDescription className="pt-2 space-y-2">
+              <p className="font-medium">
+                ¿Está seguro de que desea eliminar este sorteo?
+              </p>
+              <p className="text-sm">
+                Esta acción es permanente y no se puede deshacer. Se eliminarán todos los datos del sorteo, incluyendo los resultados y ganadores asociados.
+              </p>
+              {drawToDelete && (
+                <div className="bg-muted p-3 rounded-md mt-3 space-y-1">
+                  <p className="text-sm">
+                    <span className="font-semibold">Lotería:</span>{" "}
+                    {supabaseLotteries.find(l => l.id === drawToDelete.lotteryId)?.name || drawToDelete.lotteryName || "Desconocida"}
+                  </p>
+                  <p className="text-sm">
+                    <span className="font-semibold">Animal:</span>{" "}
+                    {drawToDelete.winningAnimalNumber} - {drawToDelete.winningAnimalName}
+                  </p>
+                  <p className="text-sm">
+                    <span className="font-semibold">Fecha:</span>{" "}
+                    {format(new Date(drawToDelete.drawTime), "d 'de' MMMM, yyyy 'a las' HH:mm", { locale: es })}
+                  </p>
+                  {(drawToDelete.winnersCount || 0) > 0 && (
+                    <p className="text-sm text-amber-600 dark:text-amber-500 font-medium mt-2">
+                      ⚠️ Este sorteo tiene {drawToDelete.winnersCount} ganador(es)
+                    </p>
+                  )}
+                </div>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDeleteDrawDialogOpen(false)
+                setDrawToDelete(null)
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDeleteDraw}
+              className="gap-2"
+            >
+              <Trash className="h-4 w-4" />
+              Eliminar Sorteo
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteLotteryDialogOpen} onOpenChange={setDeleteLotteryDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Trash className="h-5 w-5 text-destructive" />
+              Eliminar Lotería
+            </DialogTitle>
+            <DialogDescription className="pt-2 space-y-2">
+              <p className="font-medium">
+                ¿Está seguro de que desea eliminar esta lotería?
+              </p>
+              <p className="text-sm">
+                Esta acción es permanente y no se puede deshacer. Se eliminarán todos los datos asociados, incluyendo sorteos, jugadas y resultados vinculados a esta lotería.
+              </p>
+              {lotteryToDelete && (
+                <div className="bg-muted p-3 rounded-md mt-3 space-y-1">
+                  <p className="text-sm">
+                    <span className="font-semibold">Lotería:</span>{" "}
+                    {supabaseLotteries.find(l => l.id === lotteryToDelete)?.name || "Desconocida"}
+                  </p>
+                  <p className="text-sm">
+                    <span className="font-semibold">Estado:</span>{" "}
+                    {supabaseLotteries.find(l => l.id === lotteryToDelete)?.isActive ? "Activa" : "Inactiva"}
+                  </p>
+                  {(() => {
+                    const lottery = supabaseLotteries.find(l => l.id === lotteryToDelete);
+                    const relatedBets = supabaseBets.filter(b => b.lotteryId === lotteryToDelete).length;
+                    const relatedDraws = supabaseDraws.filter(d => d.lotteryId === lotteryToDelete).length;
+                    return (
+                      <>
+                        {relatedDraws > 0 && (
+                          <p className="text-sm text-amber-600 dark:text-amber-500 font-medium mt-2">
+                            ⚠️ Esta lotería tiene {relatedDraws} sorteo(s) asociado(s)
+                          </p>
+                        )}
+                        {relatedBets > 0 && (
+                          <p className="text-sm text-amber-600 dark:text-amber-500 font-medium">
+                            ⚠️ Esta lotería tiene {relatedBets} jugada(s) registrada(s)
+                          </p>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDeleteLotteryDialogOpen(false)
+                setLotteryToDelete(null)
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDeleteLottery}
+              className="gap-2"
+            >
+              <Trash className="h-4 w-4" />
+              Eliminar Lotería
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
