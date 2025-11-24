@@ -70,7 +70,7 @@ export function useSupabaseTaquillas() {
 
   const createTaquilla = useCallback(async (input: Pick<Taquilla, 'fullName'|'address'|'telefono'|'email'|'password'|'username'>): Promise<boolean> => {
     try {
-      const id = crypto.randomUUID()
+      const id = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `taq_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
       const now = new Date().toISOString()
       const passwordHash = input.password ? simpleHash(input.password) : undefined
       const newTaquilla: Taquilla = {
@@ -85,31 +85,15 @@ export function useSupabaseTaquillas() {
         createdAt: now,
       }
 
-      let remoteOk = false
-      if (await testConnection()) {
-        const { error } = await supabase.from('taquillas').insert({
-          id,
-          full_name: input.fullName,
-          address: input.address,
-          telefono: input.telefono,
-          email: input.email,
-          username: input.username ?? null,
-          password_hash: passwordHash || null,
-          is_active: false,
-          created_at: now,
-        })
-        if (!error) remoteOk = true
-      }
-
+      // Solo guardar en localStorage, no conectar con Supabase
       const updated = [newTaquilla, ...taquillas]
       setTaquillas(updated)
       localStorage.setItem('taquillas_backup', JSON.stringify(updated))
-      if (remoteOk) await loadTaquillas()
       return true
     } catch (e) {
       return false
     }
-  }, [taquillas, testConnection, loadTaquillas])
+  }, [taquillas])
 
   const updateTaquilla = useCallback(async (id: string, updates: Partial<Pick<Taquilla,'fullName'|'address'|'telefono'|'email'|'password'>>): Promise<boolean> => {
     try {

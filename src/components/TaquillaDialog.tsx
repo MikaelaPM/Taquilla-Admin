@@ -86,8 +86,8 @@ export function TaquillaDialog({ open, onOpenChange, onSave }: Props) {
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancelar</Button>
-          <Button onClick={handleSave} disabled={saving || !fullName || !email || !password}>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancelar</Button>
+          <Button type="button" onClick={handleSave} disabled={saving || !fullName || !email || !password}>
             {saving ? 'Guardando…' : 'Guardar'}
           </Button>
         </DialogFooter>

@@ -975,6 +975,20 @@ function App() {
                             onClick={() => { setTaquillaStats(t); setTaquillaStatsOpen(true) }}
                             title="Ver Estadísticas"
                           >
+                  {/* Diálogo de creación de taquilla */}
+                  <TaquillaDialog
+                    open={taquillaDialogOpen}
+                    onOpenChange={setTaquillaDialogOpen}
+                    onSave={async (taq) => {
+                      const success = await createTaquilla(taq)
+                      if (success) {
+                        toast.success("Taquilla creada exitosamente")
+                      } else {
+                        toast.error("Error al crear taquilla")
+                      }
+                      return success
+                    }}
+                  />
                             <ChartLine className="h-4 w-4" />
                           </Button>
                           <Button 
