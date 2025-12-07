@@ -1,10 +1,25 @@
 import { createRoot } from 'react-dom/client'
 import { ErrorBoundary } from "react-error-boundary";
-
-import App from './App.tsx'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { ErrorFallback } from './ErrorFallback.tsx'
 import LoginRoute from './LoginRoute.tsx'
+import { AppProvider } from './contexts/AppContext'
+import { ProtectedRoute } from './components/layout/ProtectedRoute'
+import { MainLayout } from './components/layout/MainLayout'
+
+// Pages
+import { DashboardPage } from './pages/DashboardPage'
+import { ReportsPage } from './pages/ReportsPage'
+import { LotteriesPage } from './pages/LotteriesPage'
+import { DrawsPage } from './pages/DrawsPage'
+import { WinnersPage } from './pages/WinnersPage'
+import { HistoryPage } from './pages/HistoryPage'
+import { UsersPage } from './pages/UsersPage'
+import { RolesPage } from './pages/RolesPage'
+import { ApiKeysPage } from './pages/ApiKeysPage'
+import { TaquillasPage } from './pages/TaquillasPage'
+import { AgenciasPage } from './pages/AgenciasPage'
+import { ComercializadorasPage } from './pages/ComercializadorasPage'
 
 import "./main.css"
 import "./styles/theme.css"
@@ -41,10 +56,86 @@ if (!rootEl) {
     createRoot(rootEl).render(
       <ErrorBoundary FallbackComponent={ErrorFallback}>
         <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<App />} />
-            <Route path="/login" element={<LoginRoute />} />
-          </Routes>
+          <AppProvider>
+            <Routes>
+              {/* Public route */}
+              <Route path="/login" element={<LoginRoute />} />
+
+              {/* Protected routes with layout */}
+              <Route
+                element={
+                  <ProtectedRoute>
+                    <MainLayout />
+                  </ProtectedRoute>
+                }
+              >
+                <Route path="/dashboard" element={
+                  <ProtectedRoute requiredPermission="dashboard">
+                    <DashboardPage />
+                  </ProtectedRoute>
+                } />
+                <Route path="/reports" element={
+                  <ProtectedRoute requiredPermission="reports">
+                    <ReportsPage />
+                  </ProtectedRoute>
+                } />
+                <Route path="/lotteries" element={
+                  <ProtectedRoute requiredPermission="lotteries">
+                    <LotteriesPage />
+                  </ProtectedRoute>
+                } />
+                <Route path="/draws" element={
+                  <ProtectedRoute requiredPermission="draws.read">
+                    <DrawsPage />
+                  </ProtectedRoute>
+                } />
+                <Route path="/winners" element={
+                  <ProtectedRoute requiredPermission="winners">
+                    <WinnersPage />
+                  </ProtectedRoute>
+                } />
+                <Route path="/history" element={
+                  <ProtectedRoute requiredPermission="history">
+                    <HistoryPage />
+                  </ProtectedRoute>
+                } />
+                <Route path="/users" element={
+                  <ProtectedRoute requiredPermission="users">
+                    <UsersPage />
+                  </ProtectedRoute>
+                } />
+                <Route path="/roles" element={
+                  <ProtectedRoute requiredPermission="roles">
+                    <RolesPage />
+                  </ProtectedRoute>
+                } />
+                <Route path="/api-keys" element={
+                  <ProtectedRoute requiredPermission="api-keys">
+                    <ApiKeysPage />
+                  </ProtectedRoute>
+                } />
+                <Route path="/taquillas" element={
+                  <ProtectedRoute requiredPermission="taquillas">
+                    <TaquillasPage />
+                  </ProtectedRoute>
+                } />
+                <Route path="/agencias" element={
+                  <ProtectedRoute requiredPermission="agencias">
+                    <AgenciasPage />
+                  </ProtectedRoute>
+                } />
+                <Route path="/comercializadoras" element={
+                  <ProtectedRoute requiredPermission="comercializadoras">
+                    <ComercializadorasPage />
+                  </ProtectedRoute>
+                } />
+              </Route>
+
+              {/* Default redirect */}
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            </Routes>
+          </AppProvider>
         </BrowserRouter>
       </ErrorBoundary>
     )
