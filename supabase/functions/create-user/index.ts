@@ -19,6 +19,7 @@ Deno.serve(async (req) => {
             userType,
             isActive,
             address,
+            phone,
             shareOnSales,
             shareOnProfits,
             parentId  // ID del padre jerárquico (comercializadora para agencia, agencia para taquilla)
@@ -109,6 +110,7 @@ Deno.serve(async (req) => {
                 parent_id: parentId || null,
                 user_type: userType || 'admin',
                 address: address || null,
+                phone: phone || null,
                 share_on_sales: parseFloat(shareOnSales) || 0,
                 share_on_profits: parseFloat(shareOnProfits) || 0
             })

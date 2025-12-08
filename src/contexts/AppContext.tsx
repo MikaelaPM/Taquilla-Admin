@@ -264,7 +264,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     id: user.id,
     fullName: user.name,
     address: user.address || '',
-    telefono: '',
+    telefono: user.phone || '',
     email: user.email,
     username: user.email.split('@')[0],
     isApproved: user.isActive,
@@ -305,6 +305,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       roleIds: [],
       createdBy: currentUser?.id || 'system',
       address: input.address || '',
+      phone: input.telefono || '',
       shareOnSales: input.shareOnSales || 0,
       shareOnProfits: input.shareOnProfits || 0,
       parentId: parentId
@@ -316,7 +317,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return await updateUser(id, {
       name: updates.fullName,
       address: updates.address,
-      isActive: updates.isApproved
+      phone: updates.telefono,
+      parentId: updates.agencyId,
+      isActive: updates.isApproved,
+      shareOnSales: updates.shareOnSales,
+      shareOnProfits: updates.shareOnProfits
     })
   }
 

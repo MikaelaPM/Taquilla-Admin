@@ -96,6 +96,7 @@ export function useSupabaseUsers() {
           created_by,
           user_type,
           address,
+          phone,
           share_on_sales,
           share_on_profits,
           parent_id
@@ -121,6 +122,7 @@ export function useSupabaseUsers() {
             email: user.email,
             userType: user.user_type,
             address: user.address,
+            phone: user.phone,
             shareOnSales: parseFloat(user.share_on_sales) || 0,
             shareOnProfits: parseFloat(user.share_on_profits) || 0,
             roleIds: roleIds,
@@ -192,6 +194,7 @@ export function useSupabaseUsers() {
       createdAt: new Date().toISOString(),
       createdBy: userData.createdBy || 'local-system',
       address: userData.address,
+      phone: userData.phone,
       shareOnSales: userData.shareOnSales || 0,
       shareOnProfits: userData.shareOnProfits || 0,
       parentId: userData.parentId
@@ -231,6 +234,7 @@ export function useSupabaseUsers() {
               userType: userData.userType || 'admin',
               isActive: userData.isActive ?? true,
               address: userData.address || null,
+              phone: userData.phone || null,
               shareOnSales: userData.shareOnSales || 0,
               shareOnProfits: userData.shareOnProfits || 0,
               parentId: userData.parentId || null
@@ -316,6 +320,7 @@ export function useSupabaseUsers() {
         if (userData.email !== undefined) updateData.email = userData.email
         if (userData.isActive !== undefined) updateData.is_active = userData.isActive
         if (userData.address !== undefined) updateData.address = userData.address
+        if (userData.phone !== undefined) updateData.phone = userData.phone
         if (userData.parentId !== undefined) updateData.parent_id = userData.parentId
         if (userData.shareOnSales !== undefined) updateData.share_on_sales = userData.shareOnSales
         if (userData.shareOnProfits !== undefined) updateData.share_on_profits = userData.shareOnProfits

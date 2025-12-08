@@ -13,11 +13,9 @@ interface Props {
   onOpenChange: (v: boolean) => void
   onSave: (taq: { fullName: string; address: string; telefono: string; email: string; password?: string; agencyId?: string; shareOnSales: number; shareOnProfits: number }) => Promise<boolean>
   agencies: Agency[]
-  defaultAgencyId?: string
-  currentUserEmail?: string
 }
 
-export function TaquillaDialog({ open, onOpenChange, onSave, agencies, defaultAgencyId, currentUserEmail }: Props) {
+export function TaquillaDialog({ open, onOpenChange, onSave, agencies }: Props) {
   const [fullName, setFullName] = useState('')
   const [address, setAddress] = useState('')
   const [telefono, setTelefono] = useState('')
@@ -40,58 +38,17 @@ export function TaquillaDialog({ open, onOpenChange, onSave, agencies, defaultAg
 
   useEffect(() => {
     if (!open) {
-      setFullName(''); setAddress(''); setTelefono(''); setEmail(''); setPassword(''); setAgencyId(undefined)
-      setShareOnSales(''); setShareOnProfits('')
+      setFullName('')
+      setAddress('')
+      setTelefono('')
+      setEmail('')
+      setPassword('')
+      setAgencyId(undefined)
+      setShareOnSales('')
+      setShareOnProfits('')
       setErrors({})
-    } else {
-      // Cargar agencias desde localStorage si no vienen en props
-      let agenciasParaBuscar = agencies || []
-      if (agenciasParaBuscar.length === 0) {
-        try {
-          const stored = localStorage.getItem('taquilla-agencies')
-          if (stored) {
-            agenciasParaBuscar = JSON.parse(stored)
-          }
-        } catch (e) {
-          console.error('Error cargando agencias:', e)
-        }
-      }
-
-      // Auto-seleccionar agencia
-      if (defaultAgencyId) {
-        setAgencyId(defaultAgencyId)
-      } else if (agenciasParaBuscar.length === 1) {
-        setAgencyId(agenciasParaBuscar[0].id)
-      } else if (agenciasParaBuscar.length > 0) {
-        // Obtener email
-        let userEmail = currentUserEmail
-        if (!userEmail) {
-          try {
-            const authData = JSON.parse(localStorage.getItem('supabase.auth.token') || '{}')
-            userEmail = authData.currentSession?.user?.email
-          } catch (e) { }
-        }
-
-        if (userEmail) {
-          // Buscar por userEmail exacto
-          const myAgency = agenciasParaBuscar.find((a: any) => a.userEmail === userEmail)
-          if (myAgency) {
-            setAgencyId(myAgency.id)
-          } else {
-            // Fallback: buscar por nombre
-            const emailPrefix = userEmail.split('@')[0].toLowerCase().replace('agencia', '').replace('s', '')
-            const agencyByName = agenciasParaBuscar.find((a: any) => {
-              const agencyName = a.name?.toLowerCase().replace(/\s+/g, '').replace('agencia', '') || ''
-              return agencyName.includes(emailPrefix) || emailPrefix.includes(agencyName)
-            })
-            if (agencyByName) {
-              setAgencyId(agencyByName.id)
-            }
-          }
-        }
-      }
     }
-  }, [open, defaultAgencyId, agencies, currentUserEmail])
+  }, [open])
 
   const validate = () => {
     const newErrors: Record<string, string> = {}
@@ -175,7 +132,7 @@ export function TaquillaDialog({ open, onOpenChange, onSave, agencies, defaultAg
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Registrar Taquilla</DialogTitle>
           <DialogDescription>Ingrese los datos de la taquilla. La contraseña se guarda de forma segura.</DialogDescription>
@@ -192,6 +149,7 @@ export function TaquillaDialog({ open, onOpenChange, onSave, agencies, defaultAg
               }}
               placeholder="Ej: Taquilla Centro"
               className={errors.fullName ? "border-destructive" : ""}
+              autoComplete="off"
             />
             {errors.fullName && <p className="text-xs text-destructive">{errors.fullName}</p>}
           </div>
@@ -205,6 +163,7 @@ export function TaquillaDialog({ open, onOpenChange, onSave, agencies, defaultAg
               }}
               placeholder="Ej: Av. Bolívar, Local 5"
               className={errors.address ? "border-destructive" : ""}
+              autoComplete="off"
             />
             {errors.address && <p className="text-xs text-destructive">{errors.address}</p>}
           </div>
@@ -215,6 +174,7 @@ export function TaquillaDialog({ open, onOpenChange, onSave, agencies, defaultAg
               onChange={handlePhoneChange}
               placeholder="Ej: 0414-1234567"
               className={errors.telefono ? "border-destructive" : ""}
+              autoComplete="off"
             />
             {errors.telefono && <p className="text-xs text-destructive">{errors.telefono}</p>}
           </div>
@@ -229,6 +189,7 @@ export function TaquillaDialog({ open, onOpenChange, onSave, agencies, defaultAg
               }}
               placeholder="correo@ejemplo.com"
               className={errors.email ? "border-destructive" : ""}
+              autoComplete="off"
             />
             {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
           </div>
@@ -243,6 +204,7 @@ export function TaquillaDialog({ open, onOpenChange, onSave, agencies, defaultAg
               }}
               placeholder="Mínimo 6 caracteres"
               className={errors.password ? "border-destructive" : ""}
+              autoComplete="new-password"
             />
             {errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
           </div>

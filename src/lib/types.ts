@@ -165,6 +165,7 @@ export interface User {
   createdBy: string
   // Campos de negocio (para comercializadoras, agencias y taquillas)
   address?: string // Dirección física
+  phone?: string // Teléfono de contacto
   shareOnSales?: number // Porcentaje de participación sobre ventas
   shareOnProfits?: number // Porcentaje de participación sobre ganancias
   // Relación jerárquica: agencia→comercializadora, taquilla→agencia
