@@ -34,6 +34,8 @@ export function AgenciesTab({ comercializadoras, agencies, isLoading, onCreate, 
     const [agencyToDelete, setAgencyToDelete] = useState<Agency | null>(null)
     const [isDeleting, setIsDeleting] = useState(false)
 
+    const isComercializadora = currentUser?.userType === 'comercializadora'
+
     const defaultParentId = useMemo(() => {
         // Si el usuario actual es comercializadora, usar su ID como parent
         if (currentUser?.userType === 'comercializadora') {
@@ -225,8 +227,9 @@ export function AgenciesTab({ comercializadoras, agencies, isLoading, onCreate, 
                                     <TableHeader>
                                         <TableRow>
                                             <TableHead>Nombre</TableHead>
+                                            <TableHead>Email</TableHead>
                                             <TableHead>Dirección</TableHead>
-                                            <TableHead>Comercializadora</TableHead>
+                                            {!isComercializadora && <TableHead>Comercializadora</TableHead>}
                                             <TableHead>Participación</TableHead>
                                             <TableHead>Estado</TableHead>
                                             <TableHead>Creada</TableHead>
@@ -242,11 +245,16 @@ export function AgenciesTab({ comercializadoras, agencies, isLoading, onCreate, 
                                                         <span className="font-medium">{agency.name}</span>
                                                     </TableCell>
                                                     <TableCell className="text-muted-foreground">
-                                                        {agency.address || '-'}
+                                                        {agency.email || '-'}
                                                     </TableCell>
                                                     <TableCell className="text-muted-foreground">
-                                                        {comercializadora?.name || 'Desconocida'}
+                                                        {agency.address || '-'}
                                                     </TableCell>
+                                                    {!isComercializadora && (
+                                                        <TableCell className="text-muted-foreground">
+                                                            {comercializadora?.name || 'Desconocida'}
+                                                        </TableCell>
+                                                    )}
                                                     <TableCell>
                                                         <div className="flex flex-col gap-1">
                                                             <Badge variant="outline" className="w-fit">

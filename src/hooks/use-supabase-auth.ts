@@ -86,6 +86,23 @@ export function useSupabaseAuth() {
             .single()
 
           if (!error && userData) {
+            // Verificar que no sea tipo taquilla y esté activo
+            if (userData.user_type === 'taquilla') {
+              await supabase.auth.signOut()
+              setCurrentUser(null)
+              setCurrentUserId('')
+              setIsLoading(false)
+              return
+            }
+
+            if (!userData.is_active) {
+              await supabase.auth.signOut()
+              setCurrentUser(null)
+              setCurrentUserId('')
+              setIsLoading(false)
+              return
+            }
+
             // Obtener roles completos con permisos (solo para admins)
             const { data: userRolesData } = await supabase
               .from('user_roles')
@@ -157,6 +174,30 @@ export function useSupabaseAuth() {
       }
 
       if (data.user) {
+        // Verificar tipo de usuario y estado activo antes de permitir acceso
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('user_type, is_active')
+          .eq('id', data.user.id)
+          .single()
+
+        if (userError || !userData) {
+          await supabase.auth.signOut()
+          return { success: false, error: 'No se pudo verificar el usuario' }
+        }
+
+        // No permitir acceso a usuarios tipo taquilla
+        if (userData.user_type === 'taquilla') {
+          await supabase.auth.signOut()
+          return { success: false, error: 'Los usuarios de tipo taquilla no tienen acceso a este sistema' }
+        }
+
+        // No permitir acceso a usuarios inactivos
+        if (!userData.is_active) {
+          await supabase.auth.signOut()
+          return { success: false, error: 'Su cuenta está desactivada. Contacte al administrador' }
+        }
+
         // La actualización del estado se maneja en onAuthStateChange
         return { success: true }
       }

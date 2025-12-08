@@ -19,8 +19,11 @@ export function TaquillasPage() {
     visibleTaquillas,
     visibleAgencies,
     createTaquilla,
-    updateTaquilla
+    updateTaquilla,
+    currentUser
   } = useApp()
+
+  const isAgencia = currentUser?.userType === 'agencia'
 
   const [taquillaDialogOpen, setTaquillaDialogOpen] = useState(false)
   const [taquillaEditOpen, setTaquillaEditOpen] = useState(false)
@@ -129,7 +132,7 @@ export function TaquillasPage() {
                       <TableHead>Email</TableHead>
                       <TableHead>Teléfono</TableHead>
                       <TableHead>Dirección</TableHead>
-                      <TableHead>Agencia</TableHead>
+                      {!isAgencia && <TableHead>Agencia</TableHead>}
                       <TableHead>Participación</TableHead>
                       <TableHead>Estado</TableHead>
                       <TableHead>Creada</TableHead>
@@ -153,9 +156,11 @@ export function TaquillasPage() {
                           <TableCell className="text-muted-foreground">
                             {taquilla.address || '-'}
                           </TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {agencia?.name || 'Sin asignar'}
-                          </TableCell>
+                          {!isAgencia && (
+                            <TableCell className="text-muted-foreground">
+                              {agencia?.name || 'Sin asignar'}
+                            </TableCell>
+                          )}
                           <TableCell>
                             <div className="flex flex-col gap-1">
                               <Badge variant="outline" className="w-fit">

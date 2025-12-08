@@ -249,6 +249,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const agencies = (supabaseUsers || []).filter(u => u.userType === 'agencia').map(user => ({
     id: user.id,
     name: user.name,
+    email: user.email,
     address: user.address || '',
     logo: undefined,
     parentId: user.parentId || '',
@@ -363,19 +364,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Visibility filters
   const getVisibleAgencies = () => {
     if (!currentUser) return []
+    // Admin ve todas las agencias
     if (currentUser.userType === 'admin' || !currentUser.userType) return agencies
-    if (currentUser.userType === 'comercializadora') return agencies
-    if (currentUser.userType === 'agencia') return agencies
+    // Comercializadora solo ve las agencias que le pertenecen (parentId = su id)
+    if (currentUser.userType === 'comercializadora') {
+      return agencies.filter(a => a.parentId === currentUser.id)
+    }
+    // Agencia no ve otras agencias
     return []
   }
 
   const getVisibleTaquillas = () => {
     if (!currentUser) return []
+    // Admin ve todas las taquillas
     if (currentUser.userType === 'admin' || !currentUser.userType) return taquillas
-    if (currentUser.userType === 'comercializadora') return taquillas
-    if (currentUser.userType === 'agencia') return taquillas
-    if (currentUser.userType === 'taquilla' && currentUser.taquillaId) {
-      return taquillas.filter(t => t.id === currentUser.taquillaId)
+    // Comercializadora ve las taquillas de sus agencias
+    if (currentUser.userType === 'comercializadora') {
+      const myAgencyIds = agencies.filter(a => a.parentId === currentUser.id).map(a => a.id)
+      return taquillas.filter(t => myAgencyIds.includes(t.parentId || ''))
+    }
+    // Agencia solo ve las taquillas que le pertenecen (parentId = su id)
+    if (currentUser.userType === 'agencia') {
+      return taquillas.filter(t => t.parentId === currentUser.id)
+    }
+    // Taquilla solo ve su propia información
+    if (currentUser.userType === 'taquilla') {
+      return taquillas.filter(t => t.id === currentUser.id)
     }
     return []
   }

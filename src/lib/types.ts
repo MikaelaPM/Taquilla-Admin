@@ -89,6 +89,7 @@ export interface Taquilla {
 export interface Agency {
   id: string
   name: string
+  email?: string
   address: string
   logo?: string
   userId?: string // Usuario vinculado (userType: 'agencia')
