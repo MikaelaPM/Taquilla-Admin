@@ -1,9 +1,8 @@
 import { useState, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { UserDialog } from '@/components/UserDialog'
 import { useApp } from '@/contexts/AppContext'
@@ -11,7 +10,7 @@ import { User } from '@/lib/types'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { Plus, Pencil, Trash, MagnifyingGlass, Users, Warning, CheckCircle, XCircle } from '@phosphor-icons/react'
+import { Plus, PencilSimpleLine, X, MagnifyingGlass, Users, Warning, CheckCircle, XCircle, Envelope, CalendarBlank, ShieldCheck, Trash } from '@phosphor-icons/react'
 
 export function UsersPage() {
   const {
@@ -39,18 +38,23 @@ export function UsersPage() {
   )
 
   const filteredUsers = useMemo(() => {
-    return adminUsers.filter(user => {
-      const matchesSearch = search === '' ||
-        user.name.toLowerCase().includes(search.toLowerCase()) ||
-        user.email.toLowerCase().includes(search.toLowerCase())
+    return adminUsers
+      .filter(user => {
+        const matchesSearch = search === '' ||
+          user.name.toLowerCase().includes(search.toLowerCase()) ||
+          user.email.toLowerCase().includes(search.toLowerCase())
 
-      const matchesStatus = statusFilter === 'all' ||
-        (statusFilter === 'active' && user.isActive) ||
-        (statusFilter === 'inactive' && !user.isActive)
+        const matchesStatus = statusFilter === 'all' ||
+          (statusFilter === 'active' && user.isActive) ||
+          (statusFilter === 'inactive' && !user.isActive)
 
-      return matchesSearch && matchesStatus
-    })
+        return matchesSearch && matchesStatus
+      })
+      .sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }))
   }, [adminUsers, search, statusFilter])
+
+  const activeCount = adminUsers.filter(u => u.isActive).length
+  const inactiveCount = adminUsers.filter(u => !u.isActive).length
 
   const handleSaveUser = async (userData: Omit<User, 'id' | 'createdAt'>): Promise<boolean> => {
     try {
@@ -69,7 +73,12 @@ export function UsersPage() {
     }
   }
 
-  const handleEditUser = (user: User) => {
+  const handleCreate = () => {
+    setEditingUser(undefined)
+    setUserDialogOpen(true)
+  }
+
+  const handleEdit = (user: User) => {
     setEditingUser(user)
     setUserDialogOpen(true)
   }
@@ -101,159 +110,189 @@ export function UsersPage() {
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Usuarios</CardTitle>
-              <CardDescription>
-                Gestiona los usuarios administradores del sistema
-              </CardDescription>
-            </div>
-            <Button onClick={() => { setEditingUser(undefined); setUserDialogOpen(true) }}>
-              <Plus className="mr-2" weight="bold" />
-              Nuevo Usuario
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {/* Barra de búsqueda */}
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1">
-                <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar por nombre o email..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-10"
-                  autoComplete="off"
-                />
-              </div>
-            </div>
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">Usuarios</h2>
+          <p className="text-muted-foreground">
+            Gestiona los usuarios administradores del sistema
+          </p>
+        </div>
+        <Button onClick={handleCreate} className="gap-2 cursor-pointer">
+          <Plus weight="bold" />
+          Nuevo Usuario
+        </Button>
+      </div>
 
-            {/* Estadísticas - Filtros clickeables */}
-            <div className="flex gap-2">
-              <Button
-                variant={statusFilter === 'all' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setStatusFilter('all')}
-                className="h-8"
-              >
-                Total: {adminUsers.length}
-              </Button>
-              <Button
-                variant={statusFilter === 'active' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setStatusFilter('active')}
-                className={`h-8 ${statusFilter === 'active' ? 'bg-green-600 hover:bg-green-700' : 'text-green-600 border-green-600 hover:bg-green-50'}`}
-              >
-                Activos: {adminUsers.filter(u => u.isActive).length}
-              </Button>
-              <Button
-                variant={statusFilter === 'inactive' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setStatusFilter('inactive')}
-                className={`h-8 ${statusFilter === 'inactive' ? 'bg-red-600 hover:bg-red-700' : 'text-red-600 border-red-600 hover:bg-red-50'}`}
-              >
-                Inactivos: {adminUsers.filter(u => !u.isActive).length}
-              </Button>
-            </div>
+      {/* Filtros */}
+      <div className="flex flex-col sm:flex-row gap-4">
+        <div className="relative flex-1">
+          <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
+          <Input
+            placeholder="Buscar por nombre o email..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-10"
+            autoComplete="off"
+          />
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant={statusFilter === 'all' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setStatusFilter('all')}
+            className="cursor-pointer"
+          >
+            Todos ({adminUsers.length})
+          </Button>
+          <Button
+            variant={statusFilter === 'active' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setStatusFilter('active')}
+            className={`cursor-pointer ${statusFilter === 'active' ? 'bg-emerald-600 hover:bg-emerald-700' : ''}`}
+          >
+            Activos ({activeCount})
+          </Button>
+          <Button
+            variant={statusFilter === 'inactive' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setStatusFilter('inactive')}
+            className={`cursor-pointer ${statusFilter === 'inactive' ? 'bg-red-600 hover:bg-red-700' : ''}`}
+          >
+            Inactivos ({inactiveCount})
+          </Button>
+        </div>
+      </div>
 
-            {/* Tabla */}
-            {filteredUsers.length === 0 ? (
-              <div className="text-center py-8">
-                <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground">
-                  {search || statusFilter !== 'all' ? 'No se encontraron usuarios' : 'No hay usuarios registrados'}
-                </p>
-                {!search && statusFilter === 'all' && (
-                  <Button onClick={() => setUserDialogOpen(true)} variant="outline" className="mt-4">
-                    <Plus className="mr-2" weight="bold" />
-                    Crear Primer Usuario
-                  </Button>
-                )}
-              </div>
-            ) : (
-              <div className="border rounded-lg">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Nombre</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Roles</TableHead>
-                      <TableHead>Estado</TableHead>
-                      <TableHead>Creado</TableHead>
-                      <TableHead className="text-right">Acciones</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredUsers.map((user) => {
-                      const userRoles = roles.filter((r) => user.roleIds.includes(r.id))
-                      return (
-                        <TableRow key={user.id}>
-                          <TableCell>
-                            <span className="font-medium">{user.name}</span>
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {user.email}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-wrap gap-1">
-                              {userRoles.length > 0 ? userRoles.map((role) => (
-                                <Badge key={role.id} variant="outline" className="text-xs">
+      {/* Content */}
+      {filteredUsers.length === 0 ? (
+        <Card className="border-dashed">
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-4">
+              <Users className="h-6 w-6 text-muted-foreground" />
+            </div>
+            <p className="text-lg font-medium">
+              {search || statusFilter !== 'all' ? 'No se encontraron usuarios' : 'No hay usuarios registrados'}
+            </p>
+            <p className="text-muted-foreground text-sm mb-4">
+              {search ? 'Intenta con otros criterios de búsqueda' : 'Crea tu primer usuario para comenzar'}
+            </p>
+            {!search && statusFilter === 'all' && (
+              <Button onClick={handleCreate} variant="outline" className="gap-2 cursor-pointer">
+                <Plus weight="bold" />
+                Crear Primer Usuario
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+          {filteredUsers.map((user) => {
+            const userRoles = roles.filter((r) => user.roleIds.includes(r.id))
+            return (
+              <Card
+                key={user.id}
+                className="group relative overflow-hidden hover:shadow-lg transition-all duration-300 border-l-4"
+                style={{
+                  borderLeftColor: user.isActive ? 'rgb(16 185 129)' : 'rgb(156 163 175)'
+                }}
+              >
+                <CardContent className="px-4 py-2">
+                  {/* Header de la card */}
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <div className={`h-8 w-8 rounded-md flex items-center justify-center ${
+                        user.isActive
+                          ? 'bg-gradient-to-br from-emerald-500 to-emerald-600'
+                          : 'bg-gradient-to-br from-gray-400 to-gray-500'
+                      }`}>
+                        <Users className="h-4 w-4 text-white" weight="fill" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-sm leading-tight">
+                          {user.name}
+                        </h3>
+                        <Badge
+                          variant={user.isActive ? "default" : "secondary"}
+                          className={`mt-0.5 text-[10px] px-1.5 py-0 h-4 ${
+                            user.isActive
+                              ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100'
+                              : ''
+                          }`}
+                        >
+                          {user.isActive ? (
+                            <><CheckCircle weight="fill" className="mr-0.5 h-2.5 w-2.5" /> Activo</>
+                          ) : (
+                            <><XCircle weight="fill" className="mr-0.5 h-2.5 w-2.5" /> Inactivo</>
+                          )}
+                        </Badge>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                      <button
+                        className="h-7 w-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer"
+                        onClick={() => handleEdit(user)}
+                        title="Editar"
+                      >
+                        <PencilSimpleLine className="h-4 w-4" />
+                      </button>
+                      <button
+                        className="h-7 w-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+                        onClick={() => handleDeleteClick(user)}
+                        title="Eliminar"
+                      >
+                        <X className="h-4 w-4" weight="bold" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Info de la card */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Envelope className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">{user.email}</span>
+                    </div>
+
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <CalendarBlank className="h-3.5 w-3.5 shrink-0" />
+                      <span>
+                        {user.createdAt
+                          ? `Creado el ${format(new Date(user.createdAt), "d 'de' MMMM, yyyy", { locale: es })}`
+                          : 'Sin fecha de creación'}
+                      </span>
+                    </div>
+
+                    {/* Roles */}
+                    <div className="pt-1.5 border-t mt-2">
+                      <div className="flex items-center gap-2 text-sm">
+                        <ShieldCheck className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        <div className="flex flex-wrap gap-1">
+                          {userRoles.length > 0 ? (
+                            <>
+                              {userRoles.slice(0, 2).map((role) => (
+                                <Badge key={role.id} variant="outline" className="text-[10px] px-1.5 py-0 h-4">
                                   {role.name}
                                 </Badge>
-                              )) : (
-                                <span className="text-muted-foreground text-sm">Sin roles</span>
+                              ))}
+                              {userRoles.length > 2 && (
+                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+                                  +{userRoles.length - 2}
+                                </Badge>
                               )}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            {user.isActive ? (
-                              <Badge variant="default" className="gap-1 bg-green-600">
-                                <CheckCircle weight="fill" size={14} />
-                                Activo
-                              </Badge>
-                            ) : (
-                              <Badge variant="secondary" className="gap-1">
-                                <XCircle weight="fill" size={14} />
-                                Inactivo
-                              </Badge>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground text-sm">
-                            {user.createdAt ? format(new Date(user.createdAt), "dd MMM yyyy", { locale: es }) : '-'}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleEditUser(user)}
-                              >
-                                <Pencil size={16} />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleDeleteClick(user)}
-                                disabled={user.id === currentUserId}
-                              >
-                                <Trash size={16} />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      )
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+                            </>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">Sin roles asignados</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          })}
+        </div>
+      )}
 
       <UserDialog
         open={userDialogOpen}
@@ -293,6 +332,7 @@ export function UsersPage() {
               variant="outline"
               onClick={() => setDeleteDialogOpen(false)}
               disabled={isDeleting}
+              className="cursor-pointer"
             >
               Cancelar
             </Button>
@@ -300,6 +340,7 @@ export function UsersPage() {
               variant="destructive"
               onClick={confirmDelete}
               disabled={isDeleting}
+              className="cursor-pointer"
             >
               {isDeleting ? (
                 <>

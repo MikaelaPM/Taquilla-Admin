@@ -13,7 +13,6 @@ import { ReportsPage } from './pages/ReportsPage'
 import { LotteriesPage } from './pages/LotteriesPage'
 import { DrawsPage } from './pages/DrawsPage'
 import { WinnersPage } from './pages/WinnersPage'
-import { HistoryPage } from './pages/HistoryPage'
 import { UsersPage } from './pages/UsersPage'
 import { RolesPage } from './pages/RolesPage'
 import { ApiKeysPage } from './pages/ApiKeysPage'
@@ -92,11 +91,6 @@ if (!rootEl) {
                 <Route path="/winners" element={
                   <ProtectedRoute requiredPermission="winners">
                     <WinnersPage />
-                  </ProtectedRoute>
-                } />
-                <Route path="/history" element={
-                  <ProtectedRoute requiredPermission="history">
-                    <HistoryPage />
                   </ProtectedRoute>
                 } />
                 <Route path="/users" element={

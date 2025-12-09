@@ -63,7 +63,6 @@ export function ProtectedRoute({ children, requiredPermission }: ProtectedRouteP
       { path: '/lotteries', permission: 'lotteries' },
       { path: '/draws', permission: 'draws.read' },
       { path: '/winners', permission: 'winners' },
-      { path: '/history', permission: 'history' },
       { path: '/users', permission: 'users' },
       { path: '/roles', permission: 'roles' },
       { path: '/api-keys', permission: 'api-keys' },
