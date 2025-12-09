@@ -25,7 +25,9 @@ import {
   TrendUp,
   ChartBar,
   Funnel,
-  SpinnerGap
+  SpinnerGap,
+  CaretLeft,
+  CaretRight
 } from '@phosphor-icons/react'
 import { Winner } from '@/hooks/use-winners'
 
@@ -43,6 +45,8 @@ export function WinnersPage() {
   const [datePickerOpen, setDatePickerOpen] = useState(false)
   const [detailDialogOpen, setDetailDialogOpen] = useState(false)
   const [selectedWinner, setSelectedWinner] = useState<Winner | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 12
 
   // Calcular fechas de filtros
   const now = new Date()
@@ -124,6 +128,18 @@ export function WinnersPage() {
       porTaquilla
     }
   }, [filteredWinners])
+
+  // Paginación
+  const totalPages = Math.ceil(filteredWinners.length / itemsPerPage)
+  const paginatedWinners = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage
+    return filteredWinners.slice(startIndex, startIndex + itemsPerPage)
+  }, [filteredWinners, currentPage, itemsPerPage])
+
+  // Resetear página cuando cambian los filtros
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [search, lotteryFilter, periodFilter, customDateRange])
 
   const handleViewDetail = (winner: Winner) => {
     setSelectedWinner(winner)
@@ -357,35 +373,35 @@ export function WinnersPage() {
           {/* Resumen por período */}
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
-              Mostrando <span className="font-semibold text-foreground">{filteredWinners.length}</span> ganadores - {getPeriodLabel()}
+              Mostrando <span className="font-semibold text-foreground">{paginatedWinners.length}</span> de{' '}
+              <span className="font-semibold text-foreground">{filteredWinners.length}</span> ganadores - {getPeriodLabel()}
             </p>
+            {totalPages > 1 && (
+              <p className="text-sm text-muted-foreground">
+                Página {currentPage} de {totalPages}
+              </p>
+            )}
           </div>
 
           {/* Grid de ganadores */}
-          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-            {filteredWinners.map((winner) => (
+          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {paginatedWinners.map((winner) => (
               <Card
                 key={winner.id}
                 className="group relative overflow-hidden hover:shadow-lg transition-all duration-300 border-l-4 border-l-amber-500"
               >
-                <CardContent className="p-4">
+                <CardContent className="px-4 py-2">
                   {/* Header de la card */}
-                  <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-start justify-between mb-2">
                     <div className="flex items-center gap-3">
-                      <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center">
-                        <span className="text-lg font-bold text-white">{winner.animalNumber}</span>
+                      <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center">
+                        <span className="text-base font-bold text-white">{winner.animalNumber}</span>
                       </div>
                       <div>
                         <h3 className="font-semibold text-sm leading-tight">
                           {winner.animalName}
                         </h3>
                         <p className="text-xs text-muted-foreground">{winner.lotteryName}</p>
-                        <Badge
-                          variant="outline"
-                          className="mt-1 text-[10px] px-1.5 py-0 h-4 bg-amber-50 text-amber-700 border-amber-200"
-                        >
-                          <Clock weight="fill" className="mr-0.5 h-2.5 w-2.5" /> Pendiente
-                        </Badge>
                       </div>
                     </div>
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
@@ -400,28 +416,28 @@ export function WinnersPage() {
                   </div>
 
                   {/* Info */}
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <CalendarBlank className="h-3.5 w-3.5 shrink-0" />
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <CalendarBlank className="h-3 w-3 shrink-0" />
                       <span>{format(new Date(winner.createdAt), "dd/MM/yyyy HH:mm", { locale: es })}</span>
                     </div>
 
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Storefront className="h-3.5 w-3.5 shrink-0" />
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Storefront className="h-3 w-3 shrink-0" />
                       <span className="truncate">{winner.taquillaName}</span>
                     </div>
                   </div>
 
                   {/* Montos */}
-                  <div className="pt-3 border-t mt-3">
+                  <div className="pt-2 border-t mt-2">
                     <div className="grid grid-cols-2 gap-2">
-                      <div className="bg-muted/50 rounded-lg p-2 text-center">
-                        <p className="text-xs text-muted-foreground">Apostado</p>
-                        <p className="text-sm font-bold">{formatCurrency(winner.amount)}</p>
+                      <div className="bg-muted/50 rounded-lg p-1.5 text-center">
+                        <p className="text-[10px] text-muted-foreground">Apostado</p>
+                        <p className="text-xs font-bold">{formatCurrency(winner.amount)}</p>
                       </div>
-                      <div className="bg-amber-50 rounded-lg p-2 text-center">
-                        <p className="text-xs text-amber-600">Premio</p>
-                        <p className="text-sm font-bold text-amber-700">{formatCurrency(winner.potentialWin)}</p>
+                      <div className="bg-amber-50 rounded-lg p-1.5 text-center">
+                        <p className="text-[10px] text-amber-600">Premio</p>
+                        <p className="text-xs font-bold text-amber-700">{formatCurrency(winner.potentialWin)}</p>
                       </div>
                     </div>
                   </div>
@@ -429,6 +445,60 @@ export function WinnersPage() {
               </Card>
             ))}
           </div>
+
+          {/* Paginación */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 pt-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="gap-1"
+              >
+                <CaretLeft className="h-4 w-4" />
+                Anterior
+              </Button>
+
+              <div className="flex items-center gap-1">
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNum: number
+                  if (totalPages <= 5) {
+                    pageNum = i + 1
+                  } else if (currentPage <= 3) {
+                    pageNum = i + 1
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i
+                  } else {
+                    pageNum = currentPage - 2 + i
+                  }
+
+                  return (
+                    <Button
+                      key={pageNum}
+                      variant={currentPage === pageNum ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setCurrentPage(pageNum)}
+                      className="w-8 h-8 p-0"
+                    >
+                      {pageNum}
+                    </Button>
+                  )
+                })}
+              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="gap-1"
+              >
+                Siguiente
+                <CaretRight className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
         </div>
       )}
 

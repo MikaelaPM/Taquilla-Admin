@@ -140,7 +140,7 @@ export function MainLayout() {
       </header>
 
       {/* Subheader con Navegación */}
-      <div className="sticky top-[48px] z-40 bg-background border-b shadow-sm">
+      <div className="sticky top-[60px] z-40 bg-background border-b shadow-sm">
         <div
           className="overflow-x-auto"
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
