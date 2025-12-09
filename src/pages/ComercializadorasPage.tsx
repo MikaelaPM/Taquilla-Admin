@@ -11,12 +11,14 @@ export function ComercializadorasPage() {
     deleteComercializadora,
     setDefaultComercializadora,
     currentUserId,
-    createUser
+    createUser,
+    agencies
   } = useApp()
 
   return (
     <ComercializadorasTab
       comercializadoras={comercializadoras}
+      agencies={agencies}
       isLoading={comercializadorasLoading}
       onCreate={createComercializadora}
       onUpdate={updateComercializadora}

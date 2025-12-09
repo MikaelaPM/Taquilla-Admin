@@ -17,9 +17,9 @@ import { HistoryPage } from './pages/HistoryPage'
 import { UsersPage } from './pages/UsersPage'
 import { RolesPage } from './pages/RolesPage'
 import { ApiKeysPage } from './pages/ApiKeysPage'
-import { TaquillasPage } from './pages/TaquillasPage'
-import { AgenciasPage } from './pages/AgenciasPage'
 import { ComercializadorasPage } from './pages/ComercializadorasPage'
+import { ComercializadoraAgenciasPage } from './pages/ComercializadoraAgenciasPage'
+import { AgenciaTaquillasPage } from './pages/AgenciaTaquillasPage'
 
 import "./main.css"
 import "./styles/theme.css"
@@ -114,19 +114,19 @@ if (!rootEl) {
                     <ApiKeysPage />
                   </ProtectedRoute>
                 } />
-                <Route path="/taquillas" element={
-                  <ProtectedRoute requiredPermission="taquillas">
-                    <TaquillasPage />
-                  </ProtectedRoute>
-                } />
-                <Route path="/agencias" element={
-                  <ProtectedRoute requiredPermission="agencias">
-                    <AgenciasPage />
-                  </ProtectedRoute>
-                } />
                 <Route path="/comercializadoras" element={
                   <ProtectedRoute requiredPermission="comercializadoras">
                     <ComercializadorasPage />
+                  </ProtectedRoute>
+                } />
+                <Route path="/comercializadoras/:id/agencias" element={
+                  <ProtectedRoute requiredPermission="comercializadoras">
+                    <ComercializadoraAgenciasPage />
+                  </ProtectedRoute>
+                } />
+                <Route path="/comercializadoras/:id/agencias/:agencyId/taquillas" element={
+                  <ProtectedRoute requiredPermission="taquillas">
+                    <AgenciaTaquillasPage />
                   </ProtectedRoute>
                 } />
               </Route>

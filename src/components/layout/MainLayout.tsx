@@ -1,6 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Toaster } from '@/components/ui/sonner'
 import { useApp } from '@/contexts/AppContext'
@@ -17,7 +16,6 @@ import {
   Users,
   ShieldCheck,
   Key,
-  Storefront,
   Buildings,
   SignOut
 } from '@phosphor-icons/react'
@@ -32,8 +30,6 @@ const navItems = [
   { path: '/users', label: 'Usuarios', icon: Users, permission: 'users' },
   { path: '/roles', label: 'Roles', icon: ShieldCheck, permission: 'roles' },
   { path: '/api-keys', label: 'API Keys', icon: Key, permission: 'api-keys' },
-  { path: '/taquillas', label: 'Taquillas', icon: Storefront, permission: 'taquillas' },
-  { path: '/agencias', label: 'Agencias', icon: Buildings, permission: 'agencias' },
   { path: '/comercializadoras', label: 'Comercializadoras', icon: Buildings, permission: 'comercializadoras' },
 ]
 
@@ -59,39 +55,47 @@ export function MainLayout() {
     <div className="min-h-screen bg-background">
       <Toaster position="top-right" />
 
-      {/* Header */}
-      <div className="border-b">
-        <div className="container mx-auto px-4 py-3 md:py-4">
-          <div className="flex items-center justify-between gap-2">
-            <div className="min-w-0">
-              <h1 className="text-xl md:text-2xl lg:text-3xl font-semibold tracking-tight truncate">
-                Sistema Administrativo
+      {/* Header Principal - Fijo */}
+      <header className="sticky top-0 z-50 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white shadow-lg">
+        <div className="container mx-auto px-4 py-2">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center">
+                <Vault className="h-5 w-5 text-white" weight="bold" />
+              </div>
+              <h1 className="text-base md:text-lg font-bold tracking-tight">
+                Gestión de Loterías
               </h1>
-              <p className="text-muted-foreground mt-0.5 md:mt-1 text-xs md:text-sm">
-                Lotería de Animalitos
-              </p>
             </div>
-            <div className="flex items-center gap-2 md:gap-4 shrink-0">
+            <div className="flex items-center gap-3 shrink-0">
               <div className="text-right hidden sm:block">
                 <p className="text-sm font-medium truncate max-w-[150px] md:max-w-none">
                   {currentUser?.name}
                 </p>
-                <p className="text-xs text-muted-foreground truncate max-w-[150px] md:max-w-none">
+                <p className="text-xs text-slate-400 truncate max-w-[150px] md:max-w-none">
                   {currentUser?.email}
                 </p>
               </div>
-              <Button variant="outline" size="icon" onClick={handleLogout}>
-                <SignOut />
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleLogout}
+                className="text-slate-300 hover:text-white hover:bg-white/10 h-8 w-8"
+              >
+                <SignOut className="h-4 w-4" />
               </Button>
             </div>
           </div>
         </div>
-      </div>
+      </header>
 
-      {/* Navigation */}
-      <div className="container mx-auto px-2 sm:px-4 py-4 md:py-6">
-        <ScrollArea className="w-full mb-4 md:mb-6">
-          <nav className="inline-flex w-auto min-w-full h-auto flex-wrap gap-1 p-1 bg-muted rounded-lg">
+      {/* Subheader con Navegación */}
+      <div className="sticky top-[48px] z-40 bg-background border-b shadow-sm">
+        <div
+          className="overflow-x-auto"
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        >
+          <nav className="flex min-w-max">
             {visibleNavItems.map((item) => {
               const Icon = item.icon
               return (
@@ -100,24 +104,26 @@ export function MainLayout() {
                   to={item.path}
                   className={({ isActive }) =>
                     cn(
-                      'inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 flex-shrink-0',
+                      'flex-1 inline-flex items-center justify-center gap-2 whitespace-nowrap px-4 py-2.5 text-sm font-medium transition-all border-b-2',
                       isActive
-                        ? 'bg-background text-foreground shadow-sm'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
+                        ? 'bg-primary/5 text-primary border-primary'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/50 border-transparent'
                     )
                   }
                 >
-                  <Icon className="md:mr-2" />
-                  <span className="hidden md:inline">{item.label}</span>
+                  <Icon className="h-4 w-4" />
+                  <span className="hidden sm:inline">{item.label}</span>
                 </NavLink>
               )
             })}
           </nav>
-        </ScrollArea>
-
-        {/* Page Content */}
-        <Outlet />
+        </div>
       </div>
+
+      {/* Page Content */}
+      <main className="container mx-auto px-2 sm:px-4 py-4 md:py-6">
+        <Outlet />
+      </main>
 
       {/* Logout Dialog */}
       <Dialog open={logoutDialogOpen} onOpenChange={setLogoutDialogOpen}>

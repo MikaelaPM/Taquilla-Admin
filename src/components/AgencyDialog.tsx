@@ -203,29 +203,30 @@ export function AgencyDialog({ open, onOpenChange, onSave, comercializadoras, ag
                         </>
                     )}
 
-                    <div className="grid gap-2">
-                        <Label>Comercializadora</Label>
-                        <Select
-                            value={parentId}
-                            disabled={!!defaultParentId && !agency}
-                            onValueChange={(val) => {
-                                setParentId(val)
-                                if (errors.parentId) setErrors({ ...errors, parentId: '' })
-                            }}
-                        >
-                            <SelectTrigger className={errors.parentId ? "border-destructive" : ""}>
-                                <SelectValue placeholder="Seleccione una comercializadora" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {(comercializadoras || []).map(comercializadora => (
-                                    <SelectItem key={comercializadora.id} value={comercializadora.id}>
-                                        {comercializadora.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        {errors.parentId && <p className="text-xs text-destructive">{errors.parentId}</p>}
-                    </div>
+                    {!defaultParentId && !agency && (
+                        <div className="grid gap-2">
+                            <Label>Comercializadora</Label>
+                            <Select
+                                value={parentId}
+                                onValueChange={(val) => {
+                                    setParentId(val)
+                                    if (errors.parentId) setErrors({ ...errors, parentId: '' })
+                                }}
+                            >
+                                <SelectTrigger className={errors.parentId ? "border-destructive" : ""}>
+                                    <SelectValue placeholder="Seleccione una comercializadora" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {(comercializadoras || []).map(comercializadora => (
+                                        <SelectItem key={comercializadora.id} value={comercializadora.id}>
+                                            {comercializadora.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            {errors.parentId && <p className="text-xs text-destructive">{errors.parentId}</p>}
+                        </div>
+                    )}
 
                     {/* Información de límites de la comercializadora */}
                     {selectedComercializadora && (

@@ -2338,6 +2338,7 @@ function App() {
           <TabsContent value="comercializadoras" className="space-y-4 md:space-y-6">
             <ComercializadorasTab
               comercializadoras={comercializadoras}
+              agencies={agencies}
               isLoading={comercializadorasLoading}
               onCreate={createComercializadora}
               onUpdate={updateComercializadora}

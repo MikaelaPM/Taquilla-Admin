@@ -5,17 +5,20 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Switch } from '@/components/ui/switch'
 import { Info } from '@phosphor-icons/react'
-import type { Agency } from '@/lib/types'
+import type { Agency, Taquilla } from '@/lib/types'
 
 interface Props {
   open: boolean
   onOpenChange: (v: boolean) => void
   onSave: (taq: { fullName: string; address: string; telefono: string; email: string; password?: string; agencyId?: string; shareOnSales: number; shareOnProfits: number }) => Promise<boolean>
   agencies: Agency[]
+  defaultAgencyId?: string
+  taquilla?: Taquilla
 }
 
-export function TaquillaDialog({ open, onOpenChange, onSave, agencies }: Props) {
+export function TaquillaDialog({ open, onOpenChange, onSave, agencies, defaultAgencyId, taquilla }: Props) {
   const [fullName, setFullName] = useState('')
   const [address, setAddress] = useState('')
   const [telefono, setTelefono] = useState('')
@@ -24,6 +27,7 @@ export function TaquillaDialog({ open, onOpenChange, onSave, agencies }: Props) 
   const [agencyId, setAgencyId] = useState<string | undefined>(undefined)
   const [shareOnSales, setShareOnSales] = useState('')
   const [shareOnProfits, setShareOnProfits] = useState('')
+  const [isApproved, setIsApproved] = useState(true)
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -37,18 +41,31 @@ export function TaquillaDialog({ open, onOpenChange, onSave, agencies }: Props) 
   const maxShareOnProfits = selectedAgency?.shareOnProfits ?? 100
 
   useEffect(() => {
-    if (!open) {
-      setFullName('')
-      setAddress('')
-      setTelefono('')
-      setEmail('')
-      setPassword('')
-      setAgencyId(undefined)
-      setShareOnSales('')
-      setShareOnProfits('')
+    if (open) {
+      if (taquilla) {
+        // Modo edición: cargar datos de la taquilla
+        setFullName(taquilla.fullName || '')
+        setAddress(taquilla.address || '')
+        setTelefono(taquilla.telefono || '')
+        setEmail(taquilla.email || '')
+        setPassword('')
+        setAgencyId(taquilla.parentId || defaultAgencyId)
+        setShareOnSales((taquilla.shareOnSales || 0).toString())
+        setShareOnProfits((taquilla.shareOnProfits || 0).toString())
+      } else {
+        // Modo creación: limpiar y establecer agencia por defecto
+        setFullName('')
+        setAddress('')
+        setTelefono('')
+        setEmail('')
+        setPassword('')
+        setAgencyId(defaultAgencyId)
+        setShareOnSales('')
+        setShareOnProfits('')
+      }
       setErrors({})
     }
-  }, [open])
+  }, [open, defaultAgencyId, taquilla])
 
   const validate = () => {
     const newErrors: Record<string, string> = {}
@@ -68,9 +85,14 @@ export function TaquillaDialog({ open, onOpenChange, onSave, agencies }: Props) 
       newErrors.email = 'Correo electrónico inválido'
     }
 
-    if (!password) {
-      newErrors.password = 'La contraseña es obligatoria'
-    } else if (password.length < 6) {
+    // La contraseña solo es obligatoria al crear
+    if (!taquilla) {
+      if (!password) {
+        newErrors.password = 'La contraseña es obligatoria'
+      } else if (password.length < 6) {
+        newErrors.password = 'La contraseña debe tener al menos 6 caracteres'
+      }
+    } else if (password && password.length < 6) {
       newErrors.password = 'La contraseña debe tener al menos 6 caracteres'
     }
 
@@ -134,8 +156,13 @@ export function TaquillaDialog({ open, onOpenChange, onSave, agencies }: Props) 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Registrar Taquilla</DialogTitle>
-          <DialogDescription>Ingrese los datos de la taquilla. La contraseña se guarda de forma segura.</DialogDescription>
+          <DialogTitle>{taquilla ? 'Editar Taquilla' : 'Registrar Taquilla'}</DialogTitle>
+          <DialogDescription>
+            {taquilla
+              ? 'Modifique los datos de la taquilla. Deje la contraseña vacía para mantener la actual.'
+              : 'Ingrese los datos de la taquilla. La contraseña se guarda de forma segura.'
+            }
+          </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-3 py-2">
@@ -209,28 +236,30 @@ export function TaquillaDialog({ open, onOpenChange, onSave, agencies }: Props) 
             {errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
           </div>
 
-          <div className="grid gap-2">
-            <Label>Agencia <span className="text-destructive">*</span></Label>
-            <Select
-              value={agencyId || ""}
-              onValueChange={(val) => {
-                setAgencyId(val)
-                if (errors.agencyId) setErrors({ ...errors, agencyId: '' })
-              }}
-            >
-              <SelectTrigger className={errors.agencyId ? "border-destructive" : ""}>
-                <SelectValue placeholder="Seleccione una agencia" />
-              </SelectTrigger>
-              <SelectContent>
-                {(agencies || []).map(agency => (
-                  <SelectItem key={agency.id} value={agency.id}>
-                    {agency.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {errors.agencyId && <p className="text-xs text-destructive">{errors.agencyId}</p>}
-          </div>
+          {!defaultAgencyId && !taquilla && (
+            <div className="grid gap-2">
+              <Label>Agencia <span className="text-destructive">*</span></Label>
+              <Select
+                value={agencyId || ""}
+                onValueChange={(val) => {
+                  setAgencyId(val)
+                  if (errors.agencyId) setErrors({ ...errors, agencyId: '' })
+                }}
+              >
+                <SelectTrigger className={errors.agencyId ? "border-destructive" : ""}>
+                  <SelectValue placeholder="Seleccione una agencia" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(agencies || []).map(agency => (
+                    <SelectItem key={agency.id} value={agency.id}>
+                      {agency.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.agencyId && <p className="text-xs text-destructive">{errors.agencyId}</p>}
+            </div>
+          )}
 
           {/* Información de límites de la agencia */}
           {selectedAgency && (

@@ -181,24 +181,6 @@ export function TaquillaEditDialog({ open, taquilla, onOpenChange, onSave, agenc
             {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
           </div>
 
-          {agencies && agencies.length > 0 && (
-            <div className="grid gap-2">
-              <Label>Agencia</Label>
-              <Select value={agencyId || "none"} onValueChange={(val) => setAgencyId(val === "none" ? undefined : val)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccione una agencia" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Sin agencia</SelectItem>
-                  {agencies.map(agency => (
-                    <SelectItem key={agency.id} value={agency.id}>
-                      {agency.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
 
           {/* Información de límites de la agencia */}
           {selectedAgency && (

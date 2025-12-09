@@ -67,8 +67,6 @@ export function ProtectedRoute({ children, requiredPermission }: ProtectedRouteP
       { path: '/users', permission: 'users' },
       { path: '/roles', permission: 'roles' },
       { path: '/api-keys', permission: 'api-keys' },
-      { path: '/taquillas', permission: 'taquillas' },
-      { path: '/agencias', permission: 'agencias' },
       { path: '/comercializadoras', permission: 'comercializadoras' },
     ]
 
