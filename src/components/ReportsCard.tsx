@@ -220,8 +220,8 @@ export function ReportsCard({ draws, lotteries, bets = [], users = [] }: Reports
         {/* Top Animales Ganadores */}
         <Card>
           <CardHeader>
-            <CardTitle>Animales Más Ganadores</CardTitle>
-            <CardDescription>Top 10 animales con más victorias</CardDescription>
+            <CardTitle>Items Más Ganadores</CardTitle>
+            <CardDescription>Top 10 items con más victorias</CardDescription>
           </CardHeader>
           <CardContent>
             {topWinningAnimals.length === 0 ? (

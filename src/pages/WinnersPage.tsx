@@ -69,7 +69,7 @@ export function WinnersPage() {
             <div className="flex-1 relative">
               <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Buscar por lotería o animal..."
+                placeholder="Buscar por lotería o item..."
                 value={winnerSearch}
                 onChange={(e) => setWinnerSearch(e.target.value)}
                 className="pl-10"
@@ -107,7 +107,7 @@ export function WinnersPage() {
                     <TableRow>
                       <TableHead className="whitespace-nowrap">Fecha</TableHead>
                       <TableHead className="whitespace-nowrap">Lotería</TableHead>
-                      <TableHead className="whitespace-nowrap">Animal</TableHead>
+                      <TableHead className="whitespace-nowrap">Item</TableHead>
                       <TableHead className="whitespace-nowrap">Apuesta</TableHead>
                       <TableHead className="whitespace-nowrap">Premio</TableHead>
                     </TableRow>

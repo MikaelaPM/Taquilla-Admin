@@ -205,7 +205,7 @@ export function DrawsPage() {
                       <TableHead className="w-[120px]">Fecha</TableHead>
                       <TableHead className="w-[80px]">Hora</TableHead>
                       <TableHead>Lotería</TableHead>
-                      <TableHead>Animal</TableHead>
+                      <TableHead>Item</TableHead>
                       <TableHead className="w-[100px]">Estado</TableHead>
                       <TableHead className="w-[120px]">Premio</TableHead>
                       <TableHead className="w-[100px]">Acciones</TableHead>

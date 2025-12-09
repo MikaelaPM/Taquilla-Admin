@@ -139,7 +139,7 @@ export function DrawManagementDialog({
                 ...prev,
                 drawDate: format(date, 'yyyy-MM-dd')
             }))
-            setDatePickerOpen(false)
+            /* setDatePickerOpen(false) */
         }
     }
 
@@ -253,7 +253,7 @@ export function DrawManagementDialog({
         try {
             const success = await onSave(formData)
             if (success) {
-                onOpenChange(false)
+                /* close handled by parent */
             } else {
                 toast.error('Error al crear el sorteo')
             }
@@ -265,7 +265,7 @@ export function DrawManagementDialog({
     }
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
+        <Dialog open={open}>
             <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>
@@ -335,7 +335,7 @@ export function DrawManagementDialog({
                     {/* Fecha del Sorteo */}
                     <div className="grid gap-2">
                         <Label>Fecha del Sorteo *</Label>
-                        <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
+                        <Popover>
                             <PopoverTrigger asChild>
                                 <Button
                                     variant="outline"
@@ -481,7 +481,7 @@ export function DrawManagementDialog({
                     </div>
                     <Button
                         variant="outline"
-                        onClick={() => onOpenChange(false)}
+                        onClick={() => {/* close handled by parent */}}
                         disabled={isSubmitting}
                     >
                         Cancelar

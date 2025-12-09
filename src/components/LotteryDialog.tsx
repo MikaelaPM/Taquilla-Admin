@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -31,6 +31,13 @@ export function LotteryDialog({ open, onOpenChange, lottery, onSave, onPlayTomor
     return Array.from(new Set(existingLotteries.map(l => l.name))).sort()
   }, [existingLotteries])
 
+  // Ref para evitar re-renders innecesarios con uniqueNames
+  const uniqueNamesRef = useRef(uniqueNames)
+  uniqueNamesRef.current = uniqueNames
+
+  // Estado para demorar el renderizado del contenido (fix para React 19 + Radix)
+  const [isContentReady, setIsContentReady] = useState(false)
+
   const [name, setName] = useState(lottery?.name || "")
   const [isCustomName, setIsCustomName] = useState(() => {
     if (!lottery?.name) return uniqueNames.length === 0 // Si no hay nombres previos, empezar en modo custom
@@ -58,6 +65,11 @@ export function LotteryDialog({ open, onOpenChange, lottery, onSave, onPlayTomor
   // Sincronizar estado cuando cambia la lotería seleccionada o se abre el diálogo
   useEffect(() => {
     if (open) {
+      // Demorar el contenido para evitar loop infinito con React 19 + Radix
+      setIsContentReady(false)
+      const timer = setTimeout(() => setIsContentReady(true), 0)
+
+      const currentUniqueNames = uniqueNamesRef.current
       if (lottery) {
         // Modo edición
         setName(lottery.name)
@@ -75,7 +87,7 @@ export function LotteryDialog({ open, onOpenChange, lottery, onSave, onPlayTomor
         )
 
         // Determinar si es nombre custom
-        const isCustom = uniqueNames.length > 0 && !uniqueNames.includes(lottery.name)
+        const isCustom = currentUniqueNames.length > 0 && !currentUniqueNames.includes(lottery.name)
         setIsCustomName(isCustom)
       } else {
         // Modo creación (resetear)
@@ -87,7 +99,7 @@ export function LotteryDialog({ open, onOpenChange, lottery, onSave, onPlayTomor
         setPlaysTomorrow(true)
         setAnimalsX30([])
         setAnimalsX40([])
-        setIsCustomName(uniqueNames.length === 0)
+        setIsCustomName(currentUniqueNames.length === 0)
 
         // Resetear límites
         setBetLimits([])
@@ -96,8 +108,12 @@ export function LotteryDialog({ open, onOpenChange, lottery, onSave, onPlayTomor
         setSelectedAnimalForLimit('')
         setAnimalLimitAmount('')
       }
+
+      return () => clearTimeout(timer)
+    } else {
+      setIsContentReady(false)
     }
-  }, [open, lottery, uniqueNames])
+  }, [open, lottery])
 
   const handleSave = () => {
     if (!name || !openingTime || !closingTime || !drawTime) {
@@ -153,7 +169,7 @@ export function LotteryDialog({ open, onOpenChange, lottery, onSave, onPlayTomor
     }
 
     onSave(lotteryData)
-    onOpenChange(false)
+    /* close handled by parent */
     toast.success(lottery ? "Lotería actualizada" : "Lotería creada")
   }
 
@@ -263,6 +279,8 @@ export function LotteryDialog({ open, onOpenChange, lottery, onSave, onPlayTomor
     toast.success('Todos los límites eliminados')
   }
 
+  if (!open) return null
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -273,6 +291,11 @@ export function LotteryDialog({ open, onOpenChange, lottery, onSave, onPlayTomor
           </DialogDescription>
         </DialogHeader>
 
+        {!isContentReady ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          </div>
+        ) : (
         <div className="space-y-4 py-4">
           <div className="space-y-2">
             <Label htmlFor="name">Nombre de la Lotería</Label>
@@ -298,7 +321,7 @@ export function LotteryDialog({ open, onOpenChange, lottery, onSave, onPlayTomor
                     </SelectItem>
                   ))}
                   <SelectItem value="custom" className="font-semibold text-primary">
-                    ➕ Nuevo nombre...
+                    + Nuevo nombre...
                   </SelectItem>
                 </SelectContent>
               </Select>
@@ -578,14 +601,15 @@ export function LotteryDialog({ open, onOpenChange, lottery, onSave, onPlayTomor
             </CardContent>
           </Card>
         </div>
+        )}
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
-          <Button onClick={handleSave}>Guardar</Button>
+          <Button onClick={handleSave} disabled={!isContentReady}>Guardar</Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog >
+    </Dialog>
   )
 }
