@@ -1,312 +1,412 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { DrawManagementDialog } from '@/components/DrawManagementDialog'
 import { useApp } from '@/contexts/AppContext'
-import { formatCurrency } from '@/lib/pot-utils'
 import { toast } from 'sonner'
-import { format } from 'date-fns'
-import { Plus, Pencil, Trash, MagnifyingGlass } from '@phosphor-icons/react'
+import { format, startOfWeek, endOfWeek, addDays, addWeeks, subWeeks, isToday, isBefore, parseISO } from 'date-fns'
+import { es } from 'date-fns/locale'
+import { CaretLeft, CaretRight, Target, CheckCircle, Calendar, Warning } from '@phosphor-icons/react'
+import { ANIMALS } from '@/lib/types'
 
 export function DrawsPage() {
   const {
-    draws,
-    drawsLoading,
     lotteries,
-    bets,
-    createDraw,
-    updateDraw,
-    deleteDraw,
-    updateBet,
-    deductFromPot
+    dailyResults,
+    dailyResultsLoading,
+    createDailyResult,
+    getResultForLotteryAndDate
   } = useApp()
 
-  const [drawManagementDialogOpen, setDrawManagementDialogOpen] = useState(false)
-  const [editingDraw, setEditingDraw] = useState<any | undefined>()
-  const [deleteDrawDialogOpen, setDeleteDrawDialogOpen] = useState(false)
-  const [drawToDelete, setDrawToDelete] = useState<any | null>(null)
-  const [drawSearch, setDrawSearch] = useState('')
-  const [drawFilters, setDrawFilters] = useState<{ lotteryId?: string }>({})
+  const [currentWeekStart, setCurrentWeekStart] = useState(() =>
+    startOfWeek(new Date(), { weekStartsOn: 1 })
+  )
+  const [selectedCell, setSelectedCell] = useState<{ lotteryId: string; date: string } | null>(null)
+  const [selectedPrizeId, setSelectedPrizeId] = useState<string>('')
+  const [savingResult, setSavingResult] = useState(false)
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
 
-  const processWinnersAutomatically = async (drawData: any) => {
+  // Loterías activas ordenadas por hora de jugada
+  const activeLotteries = useMemo(() => {
+    return lotteries
+      .filter(l => l.isActive)
+      .sort((a, b) => {
+        const timeA = a.drawTime.replace(':', '')
+        const timeB = b.drawTime.replace(':', '')
+        return timeA.localeCompare(timeB)
+      })
+  }, [lotteries])
+
+  // Días de la semana actual
+  const weekDays = useMemo(() => {
+    const days: Date[] = []
+    for (let i = 0; i < 7; i++) {
+      days.push(addDays(currentWeekStart, i))
+    }
+    return days
+  }, [currentWeekStart])
+
+  const weekEnd = endOfWeek(currentWeekStart, { weekStartsOn: 1 })
+
+  const goToPreviousWeek = () => {
+    setCurrentWeekStart(subWeeks(currentWeekStart, 1))
+  }
+
+  const goToNextWeek = () => {
+    setCurrentWeekStart(addWeeks(currentWeekStart, 1))
+  }
+
+  const goToCurrentWeek = () => {
+    setCurrentWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }))
+  }
+
+  const handleCellClick = (lotteryId: string, date: Date) => {
+    const dateStr = format(date, 'yyyy-MM-dd')
+    const existingResult = getResultForLotteryAndDate(lotteryId, dateStr)
+
+    // Si ya hay resultado, no permitir editar
+    if (existingResult) {
+      return
+    }
+
+    // Solo permitir cargar resultados para hoy o días anteriores
+    if (isBefore(new Date(), date) && !isToday(date)) {
+      toast.error('No puedes cargar resultados para días futuros')
+      return
+    }
+
+    const lottery = lotteries.find(l => l.id === lotteryId)
+    if (!lottery) return
+
+    setSelectedCell({ lotteryId, date: dateStr })
+    setSelectedPrizeId('')
+  }
+
+  const handleSaveResult = async () => {
+    if (!selectedCell || !selectedPrizeId) {
+      toast.error('Selecciona un animal/número')
+      return
+    }
+
+    setConfirmDialogOpen(true)
+  }
+
+  const confirmSaveResult = async () => {
+    if (!selectedCell || !selectedPrizeId) return
+
+    setSavingResult(true)
     try {
-      const winningBets = bets.filter(bet =>
-        bet.lotteryId === drawData.lotteryId &&
-        bet.animalNumber === drawData.animalNumber &&
-        !bet.isWinner
+      const success = await createDailyResult(
+        selectedCell.lotteryId,
+        selectedPrizeId,
+        selectedCell.date
       )
 
-      if (winningBets.length === 0) {
-        toast.info('Sorteo creado. No hay jugadas ganadoras para este animal.')
-        return { winnersCount: 0, totalPayout: 0 }
+      if (success) {
+        toast.success('Resultado guardado exitosamente')
+        setSelectedCell(null)
+        setSelectedPrizeId('')
+      } else {
+        toast.error('Error al guardar el resultado')
       }
+    } catch (error) {
+      toast.error('Error al guardar el resultado')
+    } finally {
+      setSavingResult(false)
+      setConfirmDialogOpen(false)
+    }
+  }
 
-      const totalPayout = winningBets.reduce((sum, bet) => sum + bet.potentialWin, 0)
+  const getResultDisplay = (lotteryId: string, date: Date) => {
+    const dateStr = format(date, 'yyyy-MM-dd')
+    const result = getResultForLotteryAndDate(lotteryId, dateStr)
 
-      for (const bet of winningBets) {
-        await updateBet(bet.id, { isWinner: true })
+    if (result?.prize) {
+      return {
+        hasResult: true,
+        number: result.prize.animalNumber,
+        name: result.prize.animalName
       }
+    }
 
-      if (totalPayout > 0) {
-        await deductFromPot('Pote de Premios', totalPayout)
-      }
+    return { hasResult: false, number: '', name: '' }
+  }
 
-      toast.success(`🎉 ${winningBets.length} ganador${winningBets.length !== 1 ? 'es' : ''} registrado${winningBets.length !== 1 ? 's' : ''} automáticamente!`, {
-        description: `Total pagado: Bs. ${totalPayout.toFixed(2)}`
+  const selectedLottery = selectedCell
+    ? lotteries.find(l => l.id === selectedCell.lotteryId)
+    : null
+
+  const selectedAnimal = selectedPrizeId
+    ? ANIMALS.find(a => {
+        const prize = selectedLottery?.prizes?.find(p => p.id === selectedPrizeId)
+        return prize?.animalNumber === a.number
       })
-
-      return { winnersCount: winningBets.length, totalPayout }
-    } catch (error) {
-      toast.error('Error al procesar ganadores automáticamente')
-      return { winnersCount: 0, totalPayout: 0 }
-    }
-  }
-
-  const handleDeleteDraw = (draw: any) => {
-    setDrawToDelete(draw)
-    setDeleteDrawDialogOpen(true)
-  }
-
-  const confirmDeleteDraw = async () => {
-    if (!drawToDelete) return
-
-    try {
-      await deleteDraw(drawToDelete.id)
-      toast.success('Sorteo eliminado exitosamente')
-      setDeleteDrawDialogOpen(false)
-      setDrawToDelete(null)
-    } catch (error) {
-      toast.error('Error al eliminar sorteo')
-    }
-  }
-
-  const filteredDraws = draws.filter((draw) => {
-    if (drawSearch) {
-      const lottery = lotteries.find(l => l.id === draw.lotteryId)
-      const lotteryName = lottery?.name || ''
-      const searchLower = drawSearch.toLowerCase()
-      if (
-        !lotteryName.toLowerCase().includes(searchLower) &&
-        !draw.winningAnimalName.toLowerCase().includes(searchLower) &&
-        !draw.winningAnimalNumber.includes(searchLower) &&
-        !draw.drawTime.toLowerCase().includes(searchLower)
-      ) {
-        return false
-      }
-    }
-    if (drawFilters.lotteryId && draw.lotteryId !== drawFilters.lotteryId) {
-      return false
-    }
-    return true
-  })
+    : null
 
   return (
-    <div className="space-y-4 md:space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl md:text-2xl font-semibold">Administración de Sorteos</h2>
-          <p className="text-muted-foreground text-sm">Crear, editar y eliminar resultados de sorteos realizados</p>
+          <h2 className="text-2xl font-bold tracking-tight">Resultados Semanales</h2>
+          <p className="text-muted-foreground">
+            Gestiona los resultados de los sorteos por día
+          </p>
         </div>
-        <Button
-          onClick={() => {
-            setEditingDraw(undefined)
-            setDrawManagementDialogOpen(true)
-          }}
-          className="w-full sm:w-auto"
-        >
-          <Plus className="mr-2" />
-          Crear Sorteo
+      </div>
+
+      {/* Navegación de semanas */}
+      <div className="flex items-center justify-between">
+        <Button variant="outline" size="sm" onClick={goToPreviousWeek} className="gap-1">
+          <CaretLeft className="h-4 w-4" />
+          Semana Anterior
+        </Button>
+
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="text-sm px-3 py-1">
+            <Calendar className="h-4 w-4 mr-2" />
+            {format(currentWeekStart, "d MMM", { locale: es })} - {format(weekEnd, "d MMM yyyy", { locale: es })}
+          </Badge>
+          <Button variant="ghost" size="sm" onClick={goToCurrentWeek}>
+            Hoy
+          </Button>
+        </div>
+
+        <Button variant="outline" size="sm" onClick={goToNextWeek} className="gap-1">
+          Semana Siguiente
+          <CaretRight className="h-4 w-4" />
         </Button>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Panel de Control de Sorteos</CardTitle>
-          <CardDescription>Vista administrativa de todos los sorteos del sistema</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="text-center">
-              <div className="text-2xl font-bold">{draws.length}</div>
-              <div className="text-sm text-muted-foreground">Sorteos Registrados</div>
+      {/* Matriz semanal */}
+      {dailyResultsLoading ? (
+        <div className="flex flex-col items-center justify-center py-12">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary mb-4"></div>
+          <p className="text-muted-foreground">Cargando resultados...</p>
+        </div>
+      ) : activeLotteries.length === 0 ? (
+        <Card className="border-dashed">
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-4">
+              <Target className="h-6 w-6 text-muted-foreground" />
             </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold">{draws.filter(d => (d.winnersCount || 0) > 0).length}</div>
-              <div className="text-sm text-muted-foreground">Con Ganadores</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold">
-                {formatCurrency(draws.reduce((sum, d) => sum + (d.totalPayout || 0), 0))}
-              </div>
-              <div className="text-sm text-muted-foreground">Total Premios Pagados</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold">{draws.filter(d => (d.winnersCount || 0) === 0).length}</div>
-              <div className="text-sm text-muted-foreground">Sin Ganadores</div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {drawsLoading ? (
-        <Card>
-          <CardContent className="flex items-center justify-center h-32">
-            <p className="text-muted-foreground">Cargando resultados...</p>
+            <p className="text-lg font-medium">No hay sorteos activos</p>
+            <p className="text-muted-foreground text-sm">
+              Activa sorteos en la sección de Sorteos para poder cargar resultados
+            </p>
           </CardContent>
         </Card>
       ) : (
         <Card>
-          <CardHeader>
-            <CardTitle>Administrar Sorteos</CardTitle>
-            <CardDescription>Gestionar resultados - crear, editar o eliminar sorteos del sistema</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-              <div className="flex-1 relative">
-                <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar por lotería, animal o fecha..."
-                  value={drawSearch}
-                  onChange={(e) => setDrawSearch(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              <Select
-                value={drawFilters.lotteryId || 'all'}
-                onValueChange={(value) =>
-                  setDrawFilters((f) => ({ ...f, lotteryId: value === 'all' ? undefined : value }))
-                }
-              >
-                <SelectTrigger className="w-full sm:w-[200px]">
-                  <SelectValue placeholder="Filtrar por lotería" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos los sorteos</SelectItem>
-                  {lotteries.map((lottery) => (
-                    <SelectItem key={lottery.id} value={lottery.id}>
-                      {lottery.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <CardContent className="p-0 overflow-x-auto">
+            <table className="w-full border-collapse min-w-[800px]">
+              <thead>
+                <tr className="border-b bg-muted/50">
+                  <th className="text-left p-3 font-semibold text-sm sticky left-0 bg-muted/50 z-10 min-w-[180px]">
+                    Sorteo / Hora
+                  </th>
+                  {weekDays.map((day) => {
+                    const isTodayDate = isToday(day)
+                    const dayName = format(day, 'EEE', { locale: es })
+                    const dayNum = format(day, 'd')
 
-            <ScrollArea className="h-[400px] md:h-[500px]">
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[120px]">Fecha</TableHead>
-                      <TableHead className="w-[80px]">Hora</TableHead>
-                      <TableHead>Lotería</TableHead>
-                      <TableHead>Item</TableHead>
-                      <TableHead className="w-[100px]">Estado</TableHead>
-                      <TableHead className="w-[120px]">Premio</TableHead>
-                      <TableHead className="w-[100px]">Acciones</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredDraws.map((draw) => {
-                      const lottery = lotteries.find(l => l.id === draw.lotteryId)
+                    return (
+                      <th
+                        key={day.toISOString()}
+                        className={`text-center p-3 font-semibold text-sm min-w-[100px] ${
+                          isTodayDate ? 'bg-primary/10' : ''
+                        }`}
+                      >
+                        <div className="capitalize">{dayName}</div>
+                        <div className={`text-lg ${isTodayDate ? 'text-primary font-bold' : ''}`}>
+                          {dayNum}
+                        </div>
+                      </th>
+                    )
+                  })}
+                </tr>
+              </thead>
+              <tbody>
+                {activeLotteries.map((lottery) => (
+                  <tr key={lottery.id} className="border-b hover:bg-muted/30 transition-colors">
+                    <td className="p-3 sticky left-0 bg-background z-10 border-r">
+                      <div className="flex items-center gap-2">
+                        <div className="h-8 w-8 rounded-md bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shrink-0">
+                          <Target className="h-4 w-4 text-white" weight="fill" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-sm">{lottery.name}</p>
+                          <p className="text-xs text-muted-foreground">{lottery.drawTime}</p>
+                        </div>
+                      </div>
+                    </td>
+                    {weekDays.map((day) => {
+                      const dateStr = format(day, 'yyyy-MM-dd')
+                      const { hasResult, number, name } = getResultDisplay(lottery.id, day)
+                      const isTodayDate = isToday(day)
+                      const isPast = isBefore(day, new Date()) && !isTodayDate
+                      const isFuture = isBefore(new Date(), day) && !isTodayDate
+                      const isSelected = selectedCell?.lotteryId === lottery.id && selectedCell?.date === dateStr
+
                       return (
-                        <TableRow key={draw.id}>
-                          <TableCell className="font-medium">
-                            {format(new Date(draw.drawTime), 'dd/MM/yyyy')}
-                          </TableCell>
-                          <TableCell>{format(new Date(draw.drawTime), 'HH:mm')}</TableCell>
-                          <TableCell>{lottery?.name || draw.lotteryName || 'N/A'}</TableCell>
-                          <TableCell>
-                            <span className="font-mono">
-                              {draw.winningAnimalNumber} - {draw.winningAnimalName}
-                            </span>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={(draw.winnersCount || 0) > 0 ? 'default' : 'outline'}>
-                              {(draw.winnersCount || 0) > 0 ? 'Con ganadores' : 'Sin ganadores'}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            {(draw.totalPayout || 0) > 0
-                              ? formatCurrency(draw.totalPayout)
-                              : '-'}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex gap-2">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  setEditingDraw(draw)
-                                  setDrawManagementDialogOpen(true)
-                                }}
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleDeleteDraw(draw)}
-                              >
-                                <Trash className="h-4 w-4" />
-                              </Button>
+                        <td
+                          key={`${lottery.id}-${dateStr}`}
+                          className={`p-2 text-center border-r last:border-r-0 ${
+                            isTodayDate ? 'bg-primary/5' : ''
+                          }`}
+                        >
+                          {hasResult ? (
+                            <div className="flex flex-col items-center gap-0.5">
+                              <div className="h-10 w-10 rounded-lg bg-emerald-100 flex items-center justify-center">
+                                <span className="text-lg font-bold text-emerald-700">{number}</span>
+                              </div>
+                              <span className="text-[10px] text-muted-foreground truncate max-w-[80px]">
+                                {name}
+                              </span>
+                              <CheckCircle className="h-3 w-3 text-emerald-500" weight="fill" />
                             </div>
-                          </TableCell>
-                        </TableRow>
+                          ) : isFuture ? (
+                            <div className="h-10 w-10 mx-auto rounded-lg bg-muted/30 flex items-center justify-center">
+                              <span className="text-xs text-muted-foreground">-</span>
+                            </div>
+                          ) : isSelected ? (
+                            <div className="space-y-1">
+                              <Select value={selectedPrizeId} onValueChange={setSelectedPrizeId}>
+                                <SelectTrigger className="h-10 w-full text-xs">
+                                  <SelectValue placeholder="Seleccionar" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {(lottery.prizes || ANIMALS.map((a, i) => ({
+                                    id: `temp-${i}`,
+                                    animalNumber: a.number,
+                                    animalName: a.name,
+                                    multiplier: 30
+                                  }))).map((prize) => (
+                                    <SelectItem key={prize.id} value={prize.id}>
+                                      {prize.animalNumber} - {prize.animalName}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <div className="flex gap-1">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-6 text-xs flex-1"
+                                  onClick={() => setSelectedCell(null)}
+                                >
+                                  Cancelar
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  className="h-6 text-xs flex-1"
+                                  onClick={handleSaveResult}
+                                  disabled={!selectedPrizeId}
+                                >
+                                  Guardar
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => handleCellClick(lottery.id, day)}
+                              className={`h-10 w-10 mx-auto rounded-lg border-2 border-dashed flex items-center justify-center transition-all cursor-pointer ${
+                                isTodayDate
+                                  ? 'border-primary/50 hover:border-primary hover:bg-primary/10'
+                                  : isPast
+                                  ? 'border-amber-300 hover:border-amber-400 hover:bg-amber-50'
+                                  : 'border-muted-foreground/30 hover:border-muted-foreground/50'
+                              }`}
+                              title={isTodayDate ? 'Cargar resultado de hoy' : isPast ? 'Cargar resultado pendiente' : ''}
+                            >
+                              <span className={`text-lg font-medium ${
+                                isTodayDate ? 'text-primary' : 'text-muted-foreground'
+                              }`}>
+                                +
+                              </span>
+                            </button>
+                          )}
+                        </td>
                       )
                     })}
-                  </TableBody>
-                </Table>
-              </div>
-            </ScrollArea>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </CardContent>
         </Card>
       )}
 
-      <DrawManagementDialog
-        open={drawManagementDialogOpen}
-        onOpenChange={(open) => {
-          setDrawManagementDialogOpen(open)
-          if (!open) setEditingDraw(undefined)
-        }}
-        draw={editingDraw}
-        lotteries={lotteries}
-        onSave={async (drawData) => {
-          if (editingDraw) {
-            const success = await updateDraw(editingDraw.id, drawData)
-            return success
-          } else {
-            const success = await createDraw(drawData)
-            if (success) {
-              await processWinnersAutomatically(drawData)
-            }
-            return success
-          }
-        }}
-      />
+      {/* Leyenda */}
+      <div className="flex flex-wrap gap-4 text-sm">
+        <div className="flex items-center gap-2">
+          <div className="h-6 w-6 rounded bg-emerald-100 flex items-center justify-center">
+            <CheckCircle className="h-3 w-3 text-emerald-500" weight="fill" />
+          </div>
+          <span className="text-muted-foreground">Resultado cargado</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="h-6 w-6 rounded border-2 border-dashed border-primary/50"></div>
+          <span className="text-muted-foreground">Disponible para cargar (hoy)</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="h-6 w-6 rounded border-2 border-dashed border-amber-300"></div>
+          <span className="text-muted-foreground">Pendiente (días anteriores)</span>
+        </div>
+      </div>
 
-      <Dialog open={deleteDrawDialogOpen} onOpenChange={setDeleteDrawDialogOpen}>
+      {/* Diálogo de confirmación */}
+      <Dialog open={confirmDialogOpen} onOpenChange={setConfirmDialogOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Trash className="h-5 w-5 text-destructive" />
-              Eliminar Sorteo
-            </DialogTitle>
-            <DialogDescription className="pt-2">
-              ¿Está seguro de que desea eliminar este sorteo? Esta acción no se puede deshacer.
-            </DialogDescription>
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                <Target className="h-6 w-6 text-primary" weight="fill" />
+              </div>
+              <div>
+                <DialogTitle>Confirmar Resultado</DialogTitle>
+                <DialogDescription>
+                  Esta acción no se puede deshacer
+                </DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
+          <div className="py-4">
+            <div className="bg-muted/50 rounded-lg p-4 text-center mb-4">
+              <p className="text-sm text-muted-foreground mb-1">{selectedLottery?.name}</p>
+              <p className="text-sm text-muted-foreground mb-2">
+                {selectedCell?.date && format(parseISO(selectedCell.date), "EEEE d 'de' MMMM", { locale: es })}
+              </p>
+              {selectedPrizeId && selectedLottery && (
+                <div>
+                  <p className="text-3xl font-bold text-primary">
+                    {selectedLottery.prizes?.find(p => p.id === selectedPrizeId)?.animalNumber || '??'}
+                  </p>
+                  <p className="text-lg font-medium">
+                    {selectedLottery.prizes?.find(p => p.id === selectedPrizeId)?.animalName || 'Desconocido'}
+                  </p>
+                </div>
+              )}
+            </div>
+            <p className="text-sm text-muted-foreground text-center">
+              ¿Está seguro que desea guardar este resultado?
+            </p>
+          </div>
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setDeleteDrawDialogOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmDialogOpen(false)}
+              disabled={savingResult}
+            >
               Cancelar
             </Button>
-            <Button variant="destructive" onClick={confirmDeleteDraw}>
-              Eliminar
+            <Button
+              onClick={confirmSaveResult}
+              disabled={savingResult}
+            >
+              {savingResult ? 'Guardando...' : 'Confirmar'}
             </Button>
           </DialogFooter>
         </DialogContent>

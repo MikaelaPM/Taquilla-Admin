@@ -263,6 +263,7 @@ export function UsersPage() {
         }}
         user={editingUser}
         roles={roles}
+        currentUserId={currentUserId}
         onSave={handleSaveUser}
       />
 

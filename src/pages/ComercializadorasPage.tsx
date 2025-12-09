@@ -9,7 +9,6 @@ export function ComercializadorasPage() {
     createComercializadora,
     updateComercializadora,
     deleteComercializadora,
-    setDefaultComercializadora,
     currentUserId,
     createUser,
     agencies
@@ -28,7 +27,6 @@ export function ComercializadorasPage() {
           toast.error('No se pudo eliminar la comercializadora')
         }
       }}
-      onSetDefault={setDefaultComercializadora}
       currentUserId={currentUserId}
       createUser={createUser}
     />

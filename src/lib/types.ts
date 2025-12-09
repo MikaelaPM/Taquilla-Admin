@@ -41,6 +41,17 @@ export interface DrawResult {
   winnersCount: number
 }
 
+export interface DailyResult {
+  id: string
+  lotteryId: string
+  prizeId: string
+  resultDate: string // formato YYYY-MM-DD
+  createdAt: string
+  // Campos poblados desde relaciones
+  lottery?: Lottery
+  prize?: Prize
+}
+
 export interface Pot {
   name: string
   percentage: number

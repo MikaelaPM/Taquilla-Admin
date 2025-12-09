@@ -133,7 +133,7 @@ export function useSupabaseAuth() {
               is_active: userData.is_active,
               userType,
               roles: roles,
-              all_permissions: [...new Set(allPermissions)],
+              all_permissions: [...new Set(allPermissions)] as string[],
               parentId: userData.parent_id,
               taquillaId: userType === 'taquilla' ? userData.id : undefined
             }

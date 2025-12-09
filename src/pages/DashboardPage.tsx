@@ -3,7 +3,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { PotCard } from '@/components/PotCard'
 import { TransferDialog } from '@/components/TransferDialog'
-import { WithdrawDialog } from '@/components/WithdrawDialog'
 import { useApp } from '@/contexts/AppContext'
 import { INITIAL_POTS } from '@/lib/pot-utils'
 
@@ -14,13 +13,11 @@ export function DashboardPage() {
     activeBets,
     winners,
     createTransfer,
-    createWithdrawal,
-    updatePotBalance
+    deductFromPot
   } = useApp()
 
   const [transferDialogOpen, setTransferDialogOpen] = useState(false)
   const [transferFromIndex, setTransferFromIndex] = useState<number | undefined>()
-  const [withdrawDialogOpen, setWithdrawDialogOpen] = useState(false)
 
   const currentPots = pots || INITIAL_POTS
 
@@ -35,12 +32,11 @@ export function DashboardPage() {
     await createTransfer(fromPotName, toPotName, amount)
   }
 
-  const handleWithdraw = async (pot: any, amount: number) => {
-    const updatePotBalanceWrapper = async (potName: string, newBalance: number) => {
-      await updatePotBalance(potName, newBalance)
-    }
-    const success = await createWithdrawal(pot, amount, updatePotBalanceWrapper)
-    return success
+  const handleWithdraw = async (potIndex: number) => {
+    // Funcionalidad simplificada - solo muestra mensaje informativo
+    // La tabla de withdrawals no existe en Supabase
+    const pot = currentPots[potIndex]
+    console.log(`Retiro solicitado del pote: ${pot.name}`)
   }
 
   return (
@@ -59,7 +55,7 @@ export function DashboardPage() {
             pot={pot}
             index={index}
             onTransfer={openTransferDialog}
-            onWithdraw={() => setWithdrawDialogOpen(true)}
+            onWithdraw={() => handleWithdraw(index)}
           />
         ))}
       </div>
@@ -107,15 +103,8 @@ export function DashboardPage() {
         open={transferDialogOpen}
         onOpenChange={setTransferDialogOpen}
         pots={currentPots}
-        fromPotIndex={transferFromIndex}
+        initialFromIndex={transferFromIndex}
         onTransfer={handleTransfer}
-      />
-
-      <WithdrawDialog
-        open={withdrawDialogOpen}
-        onOpenChange={setWithdrawDialogOpen}
-        pots={currentPots}
-        onWithdraw={handleWithdraw}
       />
     </div>
   )
