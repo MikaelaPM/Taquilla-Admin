@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -8,6 +8,7 @@ import { Calendar } from '@/components/ui/calendar'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Progress } from '@/components/ui/progress'
 import { useApp } from '@/contexts/AppContext'
+import { useBetsStats } from '@/hooks/use-bets-stats'
 import { formatCurrency } from '@/lib/pot-utils'
 import { format, startOfDay, endOfDay, startOfWeek, startOfMonth, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -24,11 +25,14 @@ import {
   CaretUp,
   CaretDown,
   Coins,
-  Receipt
+  Receipt,
+  Hash,
+  Money
 } from '@phosphor-icons/react'
 
 export function ReportsPage() {
   const { dailyResults, dailyResultsLoading, loadDailyResults, lotteries, winners, users, taquillas } = useApp()
+  const { topMostPlayed, topHighestAmount, loading: betsStatsLoading, loadBetsStats } = useBetsStats()
 
   const [periodFilter, setPeriodFilter] = useState<'today' | 'week' | 'month' | 'custom'>('month')
   const [customDateRange, setCustomDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
@@ -190,6 +194,31 @@ export function ReportsPage() {
       .slice(0, 10)
   }, [filteredWinners])
 
+  // Cargar estadísticas de apuestas cuando cambien los filtros
+  useEffect(() => {
+    const now = new Date()
+    let startDate: string | undefined
+    let endDate: string | undefined
+
+    if (periodFilter === 'today') {
+      startDate = startOfDay(now).toISOString()
+    } else if (periodFilter === 'week') {
+      startDate = startOfWeek(now, { weekStartsOn: 1 }).toISOString()
+    } else if (periodFilter === 'month') {
+      startDate = startOfMonth(now).toISOString()
+    } else if (periodFilter === 'custom' && customDateRange.from) {
+      startDate = startOfDay(customDateRange.from).toISOString()
+      endDate = customDateRange.to ? endOfDay(customDateRange.to).toISOString() : endOfDay(customDateRange.from).toISOString()
+    }
+
+    loadBetsStats({
+      startDate,
+      endDate,
+      lotteryId: selectedLottery
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [periodFilter, selectedLottery, customDateRange.from, customDateRange.to])
+
   const getPeriodLabel = () => {
     switch (periodFilter) {
       case 'today': return 'Hoy'
@@ -217,6 +246,26 @@ export function ReportsPage() {
 
   const handleRefresh = () => {
     loadDailyResults()
+    // Recargar estadísticas de apuestas con los filtros actuales
+    let startDate: string | undefined
+    let endDate: string | undefined
+
+    if (periodFilter === 'today') {
+      startDate = todayStart.toISOString()
+    } else if (periodFilter === 'week') {
+      startDate = weekStart.toISOString()
+    } else if (periodFilter === 'month') {
+      startDate = monthStart.toISOString()
+    } else if (periodFilter === 'custom' && customDateRange.from) {
+      startDate = startOfDay(customDateRange.from).toISOString()
+      endDate = customDateRange.to ? endOfDay(customDateRange.to).toISOString() : endOfDay(customDateRange.from).toISOString()
+    }
+
+    loadBetsStats({
+      startDate,
+      endDate,
+      lotteryId: selectedLottery
+    })
   }
 
   return (
@@ -553,6 +602,157 @@ export function ReportsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Dos nuevas tablas en grid */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        {/* Top 10 Números Más Jugados por Lotería */}
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-4">
+              <Hash className="h-5 w-5 text-primary" />
+              <h3 className="font-semibold">Números Más Jugados</h3>
+              <Badge variant="outline" className="ml-auto">Top 10</Badge>
+            </div>
+            {betsStatsLoading ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <ArrowsClockwise className="h-10 w-10 text-muted-foreground mb-2 animate-spin" />
+                <p className="text-sm text-muted-foreground">Cargando estadísticas...</p>
+              </div>
+            ) : topMostPlayed.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <Hash className="h-10 w-10 text-muted-foreground mb-2" />
+                <p className="text-sm text-muted-foreground">No hay datos de jugadas para el período seleccionado</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[50px]">Pos.</TableHead>
+                      <TableHead>Número</TableHead>
+                      <TableHead className="text-right">Veces Jugado</TableHead>
+                      <TableHead>Loterías</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {topMostPlayed.map((item, index) => {
+                      const maxPlayed = topMostPlayed[0]?.timesPlayed || 1
+                      const percentage = (item.timesPlayed / maxPlayed) * 100
+                      return (
+                        <TableRow key={item.number}>
+                          <TableCell>
+                            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-500/10 text-blue-600 text-xs font-bold">
+                              {index + 1}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
+                                <span className="text-sm font-bold text-white">{item.number}</span>
+                              </div>
+                              <span className="text-xs text-muted-foreground">{item.animalName}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex flex-col items-end gap-1">
+                              <span className="font-semibold">{item.timesPlayed}</span>
+                              <Progress value={percentage} className="h-1.5 w-16" />
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              {item.lotteries.map((lottery, i) => (
+                                <Badge key={i} variant="secondary" className="text-xs">
+                                  {lottery.lotteryName} ({lottery.count})
+                                </Badge>
+                              ))}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Top 10 Números con Mayor Monto Jugado */}
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-4">
+              <Money className="h-5 w-5 text-primary" />
+              <h3 className="font-semibold">Mayor Monto Apostado</h3>
+              <Badge variant="outline" className="ml-auto">Top 10</Badge>
+            </div>
+            {betsStatsLoading ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <ArrowsClockwise className="h-10 w-10 text-muted-foreground mb-2 animate-spin" />
+                <p className="text-sm text-muted-foreground">Cargando estadísticas...</p>
+              </div>
+            ) : topHighestAmount.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <Money className="h-10 w-10 text-muted-foreground mb-2" />
+                <p className="text-sm text-muted-foreground">No hay datos de apuestas para el período seleccionado</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[50px]">Pos.</TableHead>
+                      <TableHead>Número</TableHead>
+                      <TableHead className="text-right">Monto Total</TableHead>
+                      <TableHead className="text-right">Jugadas</TableHead>
+                      <TableHead className="text-right">Promedio</TableHead>
+                      <TableHead className="text-right">A Pagar</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {topHighestAmount.map((item, index) => {
+                      const maxAmount = topHighestAmount[0]?.totalAmount || 1
+                      const percentage = (item.totalAmount / maxAmount) * 100
+                      return (
+                        <TableRow key={item.number}>
+                          <TableCell>
+                            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600 text-xs font-bold">
+                              {index + 1}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center">
+                                <span className="text-sm font-bold text-white">{item.number}</span>
+                              </div>
+                              <span className="text-xs text-muted-foreground">{item.animalName}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex flex-col items-end gap-1">
+                              <span className="font-bold text-emerald-600">{formatCurrency(item.totalAmount)}</span>
+                              <Progress value={percentage} className="h-1.5 w-16" />
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right font-medium">
+                            {item.timesPlayed}
+                          </TableCell>
+                          <TableCell className="text-right text-sm text-muted-foreground">
+                            {formatCurrency(item.avgAmount)}
+                          </TableCell>
+                          <TableCell className="text-right font-bold text-red-600">
+                            {formatCurrency(item.totalPotentialWin)}
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Resumen del período */}
       <Card>
