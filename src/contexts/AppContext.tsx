@@ -325,7 +325,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     parentId: user.parentId,
     createdAt: user.createdAt,
     shareOnSales: user.shareOnSales || 0,
-    shareOnProfits: user.shareOnProfits || 0
+    shareOnProfits: user.shareOnProfits || 0,
+    salesLimit: user.salesLimit || 0
   }))
 
   // Derived: comercializadoras from users (todas, sin filtrar)
@@ -392,6 +393,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       phone: input.telefono || '',
       shareOnSales: input.shareOnSales || 0,
       shareOnProfits: input.shareOnProfits || 0,
+      salesLimit: input.salesLimit || 0,
       parentId: parentId
     })
     return success
@@ -405,7 +407,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       parentId: updates.agencyId,
       isActive: updates.isApproved,
       shareOnSales: updates.shareOnSales,
-      shareOnProfits: updates.shareOnProfits
+      shareOnProfits: updates.shareOnProfits,
+      salesLimit: updates.salesLimit
     })
   }
 

@@ -12,7 +12,7 @@ import type { Agency, Taquilla } from '@/lib/types'
 interface Props {
   open: boolean
   onOpenChange: (v: boolean) => void
-  onSave: (taq: { fullName: string; address: string; telefono: string; email: string; password?: string; agencyId?: string; shareOnSales: number; shareOnProfits: number }) => Promise<boolean>
+  onSave: (taq: { fullName: string; address: string; telefono: string; email: string; password?: string; agencyId?: string; shareOnSales: number; shareOnProfits: number; salesLimit: number }) => Promise<boolean>
   agencies: Agency[]
   defaultAgencyId?: string
   taquilla?: Taquilla
@@ -27,6 +27,7 @@ export function TaquillaDialog({ open, onOpenChange, onSave, agencies, defaultAg
   const [agencyId, setAgencyId] = useState<string | undefined>(undefined)
   const [shareOnSales, setShareOnSales] = useState('')
   const [shareOnProfits, setShareOnProfits] = useState('')
+  const [salesLimit, setSalesLimit] = useState('')
   const [isApproved, setIsApproved] = useState(true)
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -52,6 +53,7 @@ export function TaquillaDialog({ open, onOpenChange, onSave, agencies, defaultAg
         setAgencyId(taquilla.parentId || defaultAgencyId)
         setShareOnSales((taquilla.shareOnSales || 0).toString())
         setShareOnProfits((taquilla.shareOnProfits || 0).toString())
+        setSalesLimit((taquilla.salesLimit || 0).toString())
       } else {
         // Modo creación: limpiar y establecer agencia por defecto
         setFullName('')
@@ -62,6 +64,7 @@ export function TaquillaDialog({ open, onOpenChange, onSave, agencies, defaultAg
         setAgencyId(defaultAgencyId)
         setShareOnSales('')
         setShareOnProfits('')
+        setSalesLimit('')
       }
       setErrors({})
     }
@@ -121,6 +124,14 @@ export function TaquillaDialog({ open, onOpenChange, onSave, agencies, defaultAg
       newErrors.shareOnProfits = `No puede superar ${maxShareOnProfits}% (límite de la agencia)`
     }
 
+    // Validar límite de venta
+    const salesLimitValue = parseFloat(salesLimit)
+    if (!salesLimit) {
+      newErrors.salesLimit = 'El límite de venta es obligatorio'
+    } else if (salesLimitValue < 0) {
+      newErrors.salesLimit = 'No puede ser negativo'
+    }
+
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -137,7 +148,8 @@ export function TaquillaDialog({ open, onOpenChange, onSave, agencies, defaultAg
       password,
       agencyId,
       shareOnSales: parseFloat(shareOnSales),
-      shareOnProfits: parseFloat(shareOnProfits)
+      shareOnProfits: parseFloat(shareOnProfits),
+      salesLimit: parseFloat(salesLimit)
     })
     setSaving(false)
     if (ok) onOpenChange(false)
@@ -309,6 +321,24 @@ export function TaquillaDialog({ open, onOpenChange, onSave, agencies, defaultAg
               />
               {errors.shareOnProfits && <p className="text-xs text-destructive">{errors.shareOnProfits}</p>}
             </div>
+          </div>
+
+          <div className="grid gap-2">
+            <Label>Límite de Venta</Label>
+            <Input
+              type="number"
+              min="0"
+              step="0.01"
+              value={salesLimit}
+              onChange={e => {
+                setSalesLimit(e.target.value)
+                if (errors.salesLimit) setErrors({ ...errors, salesLimit: '' })
+              }}
+              placeholder="Ej: 1000.00"
+              className={errors.salesLimit ? "border-destructive" : ""}
+            />
+            <p className="text-xs text-muted-foreground">Monto máximo de ventas permitido para esta taquilla</p>
+            {errors.salesLimit && <p className="text-xs text-destructive">{errors.salesLimit}</p>}
           </div>
         </div>
 

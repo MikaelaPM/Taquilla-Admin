@@ -197,6 +197,7 @@ export function useSupabaseUsers() {
       phone: userData.phone,
       shareOnSales: userData.shareOnSales || 0,
       shareOnProfits: userData.shareOnProfits || 0,
+      salesLimit: userData.salesLimit || 0,
       parentId: userData.parentId
     }
 
@@ -237,6 +238,7 @@ export function useSupabaseUsers() {
               phone: userData.phone || null,
               shareOnSales: userData.shareOnSales || 0,
               shareOnProfits: userData.shareOnProfits || 0,
+              salesLimit: userData.salesLimit || 0,
               parentId: userData.parentId || null
             })
           }

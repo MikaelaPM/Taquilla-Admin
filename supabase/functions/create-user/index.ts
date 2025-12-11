@@ -22,6 +22,7 @@ Deno.serve(async (req) => {
             phone,
             shareOnSales,
             shareOnProfits,
+            salesLimit,  // Límite de venta (solo para taquillas)
             parentId  // ID del padre jerárquico (comercializadora para agencia, agencia para taquilla)
         } = await req.json()
 
@@ -97,7 +98,7 @@ Deno.serve(async (req) => {
 
         // 3. Crear registro en public.users
         console.log('📊 Creando en public.users...')
-        console.log('📊 shareOnSales:', shareOnSales, 'shareOnProfits:', shareOnProfits, 'parentId:', parentId)
+        console.log('📊 shareOnSales:', shareOnSales, 'shareOnProfits:', shareOnProfits, 'salesLimit:', salesLimit, 'parentId:', parentId)
         const { error: publicError } = await supabaseAdmin
             .from('users')
             .insert({
@@ -112,7 +113,8 @@ Deno.serve(async (req) => {
                 address: address || null,
                 phone: phone || null,
                 share_on_sales: parseFloat(shareOnSales) || 0,
-                share_on_profits: parseFloat(shareOnProfits) || 0
+                share_on_profits: parseFloat(shareOnProfits) || 0,
+                sales_limit: parseFloat(salesLimit) || 0
             })
 
         if (publicError) {
