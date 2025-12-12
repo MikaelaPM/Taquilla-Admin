@@ -2,8 +2,10 @@ import { useMemo } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useApp } from '@/contexts/AppContext'
 import { useSalesStats } from '@/hooks/use-sales-stats'
+import { useComercializadoraStats } from '@/hooks/use-comercializadora-stats'
 import { formatCurrency } from '@/lib/pot-utils'
 import { format, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -21,7 +23,8 @@ import {
   CheckCircle,
   Users,
   CalendarBlank,
-  ChartLineUp
+  ChartLineUp,
+  Buildings
 } from '@phosphor-icons/react'
 
 export function DashboardPage() {
@@ -36,13 +39,23 @@ export function DashboardPage() {
     taquillas,
     visibleTaquillas,
     visibleTaquillaIds,
-    currentUser
+    currentUser,
+    comercializadoras,
+    agencies,
+    visibleAgencies
   } = useApp()
 
   // Determinar si el usuario es admin (puede ver datos globales)
   const isAdmin = currentUser?.userType === 'admin' || !currentUser?.userType
 
   const { stats: salesStats, loading: salesLoading, refresh: refreshSales } = useSalesStats({ visibleTaquillaIds })
+
+  // Stats de comercializadoras para la tabla semanal
+  const { stats: comercializadoraStats, loading: comercializadoraStatsLoading, refresh: refreshComercializadoraStats } = useComercializadoraStats({
+    comercializadoras: comercializadoras || [],
+    agencies: visibleAgencies || agencies || [],
+    taquillas: visibleTaquillas || []
+  })
 
   // Ganadores del día (ya filtrados por visibleTaquillaIds)
   const todayWinners = useMemo(() => {
@@ -96,9 +109,10 @@ export function DashboardPage() {
     loadDailyResults()
     loadWinners()
     refreshSales()
+    refreshComercializadoraStats()
   }
 
-  const isLoading = dailyResultsLoading || winnersLoading || salesLoading
+  const isLoading = dailyResultsLoading || winnersLoading || salesLoading || comercializadoraStatsLoading
 
   return (
     <div className="space-y-6">
@@ -430,6 +444,75 @@ export function DashboardPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Ventas Semanales por Comercializadora */}
+      {comercializadoras && comercializadoras.length > 0 && (
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-4">
+              <Buildings className="h-5 w-5 text-primary" />
+              <h3 className="font-semibold">Ventas Semanales por Comercializadora</h3>
+              <Badge variant="outline" className="ml-auto text-xs">Esta Semana</Badge>
+            </div>
+            {comercializadoraStatsLoading ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <ArrowsClockwise className="h-10 w-10 text-muted-foreground mb-2 animate-spin" />
+                <p className="text-sm text-muted-foreground">Cargando estadísticas...</p>
+              </div>
+            ) : comercializadoraStats.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <Buildings className="h-10 w-10 text-muted-foreground mb-2" />
+                <p className="text-sm text-muted-foreground">No hay comercializadoras con ventas esta semana</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Comercializadora</TableHead>
+                      <TableHead className="text-right">Ventas</TableHead>
+                      <TableHead className="text-right">Premios</TableHead>
+                      <TableHead className="text-right">Comisión (%)</TableHead>
+                      <TableHead className="text-right">Balance</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {comercializadoraStats.map((stat) => (
+                      <TableRow key={stat.comercializadoraId}>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center">
+                              <Buildings className="h-4 w-4 text-white" weight="fill" />
+                            </div>
+                            <span className="font-medium">{stat.comercializadoraName}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right font-semibold text-blue-600">
+                          {formatCurrency(stat.weekSales)}
+                        </TableCell>
+                        <TableCell className="text-right font-semibold text-red-600">
+                          {formatCurrency(stat.weekPrizes)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex flex-col items-end">
+                            <span className="font-medium text-amber-600">{formatCurrency(stat.salesCommission)}</span>
+                            <span className="text-xs text-muted-foreground">({stat.shareOnSales}%)</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <span className={`font-bold ${stat.balance >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                            {formatCurrency(stat.balance)}
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Loterías activas */}
       {activeLotteries.length > 0 && (
