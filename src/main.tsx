@@ -1,11 +1,28 @@
 import { createRoot } from 'react-dom/client'
 import { ErrorBoundary } from "react-error-boundary";
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ErrorFallback } from './ErrorFallback.tsx'
 import LoginRoute from './LoginRoute.tsx'
 import { AppProvider } from './contexts/AppContext'
 import { ProtectedRoute } from './components/layout/ProtectedRoute'
 import { MainLayout } from './components/layout/MainLayout'
+
+// Configuración de React Query
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // 5 minutos - datos considerados frescos
+      gcTime: 30 * 60 * 1000,   // 30 minutos - tiempo en cache
+      refetchOnWindowFocus: true, // Revalidar al volver a la pestaña
+      retry: 1, // Reintentar 1 vez en caso de error
+      refetchOnReconnect: true, // Revalidar al reconectar
+    },
+    mutations: {
+      retry: 0, // No reintentar mutaciones
+    },
+  },
+})
 
 // Pages
 import { DashboardPage } from './pages/DashboardPage'
@@ -53,9 +70,10 @@ if (!rootEl) {
 } else {
   try {
     createRoot(rootEl).render(
-      <ErrorBoundary FallbackComponent={ErrorFallback}>
-        <BrowserRouter>
-          <AppProvider>
+      <QueryClientProvider client={queryClient}>
+        <ErrorBoundary FallbackComponent={ErrorFallback}>
+          <BrowserRouter>
+            <AppProvider>
             <Routes>
               {/* Public route */}
               <Route path="/login" element={<LoginRoute />} />
@@ -129,9 +147,10 @@ if (!rootEl) {
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
-          </AppProvider>
-        </BrowserRouter>
-      </ErrorBoundary>
+            </AppProvider>
+          </BrowserRouter>
+        </ErrorBoundary>
+      </QueryClientProvider>
     )
   } catch (err: any) {
     // Ensure any early runtime error displays in the page instead of a blank screen
