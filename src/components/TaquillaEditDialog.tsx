@@ -191,21 +191,10 @@ export function TaquillaEditDialog({ open, taquilla, onOpenChange, onSave, agenc
           </div>
 
 
-          {/* Información de límites de la agencia */}
-          {selectedAgency && (
-            <Alert>
-              <Info className="h-4 w-4" />
-              <AlertDescription>
-                Límites de <strong>{selectedAgency.name}</strong>:
-                Ventas máx. {maxShareOnSales}%, Participación máx. {maxShareOnProfits}%
-              </AlertDescription>
-            </Alert>
-          )}
-
           {/* Porcentajes */}
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
-              <Label>% Ventas {selectedAgency && <span className="text-muted-foreground">(máx. {maxShareOnSales}%)</span>}</Label>
+              <Label>% Ventas</Label>
               <Input
                 type="number"
                 min="0"
@@ -216,13 +205,13 @@ export function TaquillaEditDialog({ open, taquilla, onOpenChange, onSave, agenc
                   setShareOnSales(e.target.value)
                   if (errors.shareOnSales) setErrors({ ...errors, shareOnSales: '' })
                 }}
-                placeholder={selectedAgency ? `0 - ${maxShareOnSales}` : "0 - 100"}
+                placeholder="Ej: 10"
                 className={errors.shareOnSales ? "border-destructive" : ""}
               />
               {errors.shareOnSales && <p className="text-xs text-destructive">{errors.shareOnSales}</p>}
             </div>
             <div className="grid gap-2">
-              <Label>% Participación {selectedAgency && <span className="text-muted-foreground">(máx. {maxShareOnProfits}%)</span>}</Label>
+              <Label>% Participación</Label>
               <Input
                 type="number"
                 min="0"
@@ -233,7 +222,7 @@ export function TaquillaEditDialog({ open, taquilla, onOpenChange, onSave, agenc
                   setShareOnProfits(e.target.value)
                   if (errors.shareOnProfits) setErrors({ ...errors, shareOnProfits: '' })
                 }}
-                placeholder={selectedAgency ? `0 - ${maxShareOnProfits}` : "0 - 100"}
+                placeholder="Ej: 10"
                 className={errors.shareOnProfits ? "border-destructive" : ""}
               />
               {errors.shareOnProfits && <p className="text-xs text-destructive">{errors.shareOnProfits}</p>}

@@ -228,20 +228,9 @@ export function AgencyDialog({ open, onOpenChange, onSave, comercializadoras, ag
                         </div>
                     )}
 
-                    {/* Información de límites de la comercializadora */}
-                    {selectedComercializadora && (
-                        <Alert>
-                            <Info className="h-4 w-4" />
-                            <AlertDescription>
-                                Límites de <strong>{selectedComercializadora.name}</strong>:
-                                Ventas máx. {maxShareOnSales}%, Participación máx. {maxShareOnProfits}%
-                            </AlertDescription>
-                        </Alert>
-                    )}
-
                     <div className="grid grid-cols-2 gap-4">
                         <div className="grid gap-2">
-                            <Label>% Ventas {selectedComercializadora && <span className="text-muted-foreground">(máx. {maxShareOnSales}%)</span>}</Label>
+                            <Label>% Ventas</Label>
                             <Input
                                 type="number"
                                 min="0"
@@ -252,13 +241,13 @@ export function AgencyDialog({ open, onOpenChange, onSave, comercializadoras, ag
                                     setShareOnSales(e.target.value)
                                     if (errors.shareOnSales) setErrors({ ...errors, shareOnSales: '' })
                                 }}
-                                placeholder={`0 - ${maxShareOnSales}`}
+                                placeholder="Ej: 10"
                                 className={errors.shareOnSales ? "border-destructive" : ""}
                             />
                             {errors.shareOnSales && <p className="text-xs text-destructive">{errors.shareOnSales}</p>}
                         </div>
                         <div className="grid gap-2">
-                            <Label>% Participación {selectedComercializadora && <span className="text-muted-foreground">(máx. {maxShareOnProfits}%)</span>}</Label>
+                            <Label>% Participación</Label>
                             <Input
                                 type="number"
                                 min="0"
@@ -269,7 +258,7 @@ export function AgencyDialog({ open, onOpenChange, onSave, comercializadoras, ag
                                     setShareOnProfits(e.target.value)
                                     if (errors.shareOnProfits) setErrors({ ...errors, shareOnProfits: '' })
                                 }}
-                                placeholder={`0 - ${maxShareOnProfits}`}
+                                placeholder="Ej: 10"
                                 className={errors.shareOnProfits ? "border-destructive" : ""}
                             />
                             {errors.shareOnProfits && <p className="text-xs text-destructive">{errors.shareOnProfits}</p>}
