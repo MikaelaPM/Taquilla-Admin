@@ -1,6 +1,15 @@
-import { useState, useEffect, useCallback } from 'react'
-import { supabase, isSupabaseConfigured } from '@/lib/supabase'
+import { useCallback } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import {
+  useUsersQuery,
+  useCreateUserMutation,
+  useUpdateUserMutation,
+  useDeleteUserMutation,
+  useToggleUserStatusMutation,
+  userKeys
+} from './queries/useUsersQuery'
 import { User } from '@/lib/types'
+import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { toast } from 'sonner'
 
 export interface SupabaseUser {
@@ -12,7 +21,6 @@ export interface SupabaseUser {
   created_at: string
   created_by: string | null
   updated_at: string
-  // Campos de la vista users_with_roles
   roles?: Array<{
     id: string
     name: string
@@ -23,529 +31,93 @@ export interface SupabaseUser {
   all_permissions?: string[]
 }
 
-// Funciones de almacenamiento local
-const getLocalUsers = (): User[] => {
-  try {
-    const stored = localStorage.getItem('users')
-    return stored ? JSON.parse(stored) : []
-  } catch (error) {
-    // Error loading local users
-
-    return []
-  }
-}
-
-const saveLocalUsers = (users: User[]): void => {
-  try {
-    localStorage.setItem('users', JSON.stringify(users))
-  } catch (error) {
-
-  }
-}
-
 export function useSupabaseUsers() {
-  const [users, setUsers] = useState<User[]>([])
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const queryClient = useQueryClient()
 
-  // Cargar usuarios desde Supabase y local
+  // Query para obtener usuarios
+  const { data: users = [], isLoading, error } = useUsersQuery()
+
+  // Mutations
+  const createUserMutation = useCreateUserMutation()
+  const updateUserMutation = useUpdateUserMutation()
+  const deleteUserMutation = useDeleteUserMutation()
+  const toggleStatusMutation = useToggleUserStatusMutation()
+
+  // Función para recargar usuarios (invalida cache)
   const loadUsers = useCallback(async () => {
-    setIsLoading(true)
-    setError(null)
+    await queryClient.invalidateQueries({ queryKey: userKeys.all })
+  }, [queryClient])
 
-    // Cargar usuarios locales primero
-    const localUsers = getLocalUsers()
-
-    if (!isSupabaseConfigured()) {
-      // Solo usar usuarios locales + usuarios por defecto si Supabase no está configurado
-      const defaultUsers: User[] = [
-        {
-          id: 'admin-user-default',
-          name: 'Administrador Principal',
-          email: 'admin@loteria.com',
-          roleIds: ['admin'],
-          isActive: true,
-          createdAt: new Date().toISOString(),
-          createdBy: 'system',
-        }
-      ]
-
-      // Combinar usuarios por defecto con locales (evitar duplicados)
-      const combinedUsers = [...defaultUsers]
-      localUsers.forEach(localUser => {
-        if (!combinedUsers.find(u => u.id === localUser.id)) {
-          combinedUsers.push(localUser)
-        }
-      })
-
-      setUsers(combinedUsers)
-      setIsLoading(false)
-      return
-    }
-
-    try {
-      // Cargar usuarios desde Supabase
-      const { data, error } = await supabase
-        .from('users')
-        .select(`
-          id,
-          name,
-          email,
-          is_active,
-          created_at,
-          created_by,
-          user_type,
-          address,
-          phone,
-          share_on_sales,
-          share_on_profits,
-          parent_id
-        `)
-        .order('created_at', { ascending: true })
-
-      if (error) throw error
-
-      // Cargar roles para cada usuario
-      const usersWithRoles = await Promise.all(
-        data.map(async (user: any) => {
-          // Obtener roles del usuario
-          const { data: userRolesData } = await supabase
-            .from('user_roles')
-            .select('role_id')
-            .eq('user_id', user.id)
-
-          const roleIds = userRolesData?.map(ur => ur.role_id) || []
-
-          return {
-            id: user.id,
-            name: user.name,
-            email: user.email,
-            userType: user.user_type,
-            address: user.address,
-            phone: user.phone,
-            shareOnSales: parseFloat(user.share_on_sales) || 0,
-            shareOnProfits: parseFloat(user.share_on_profits) || 0,
-            roleIds: roleIds,
-            isActive: user.is_active,
-            createdAt: user.created_at,
-            createdBy: user.created_by || 'system',
-            parentId: user.parent_id
-          }
-        })
-      )
-
-
-
-      // Combinar usuarios de Supabase con locales (prioridad a Supabase)
-      const combinedUsers: User[] = [...usersWithRoles]
-      localUsers.forEach(localUser => {
-        if (!combinedUsers.find(u => u.id === localUser.id || u.email === localUser.email)) {
-          combinedUsers.push(localUser)
-        }
-      })
-
-      setUsers(combinedUsers)
-
-      // Guardar la combinación localmente
-      saveLocalUsers(combinedUsers)
-
-    } catch (error: any) {
-
-      setError(error.message || 'Error al cargar usuarios')
-      toast.error('Error al cargar usuarios desde Supabase, usando datos locales')
-
-      // Fallback a usuarios locales + por defecto
-      const defaultUsers: User[] = [
-        {
-          id: 'admin-user-fallback',
-          name: 'Administrador Principal',
-          email: 'admin@loteria.com',
-          roleIds: ['admin'],
-          isActive: true,
-          createdAt: new Date().toISOString(),
-          createdBy: 'system',
-        }
-      ]
-
-      const combinedUsers = [...defaultUsers, ...localUsers]
-      setUsers(combinedUsers)
-    } finally {
-      setIsLoading(false)
-    }
-  }, [])
-
-  const createUser = async (userData: Omit<User, 'id' | 'createdAt'>): Promise<boolean> => {
-    // 1. Verificar si el email ya existe localmente
-    const existingLocalUser = users.find(u => u.email === userData.email)
-    if (existingLocalUser) {
-      toast.error('Ya existe un usuario con este email localmente')
+  // Crear usuario - mantiene la interfaz original
+  const createUser = useCallback(async (userData: Omit<User, 'id' | 'createdAt'>): Promise<boolean> => {
+    // Verificar si el email ya existe localmente
+    const existingUser = users.find(u => u.email === userData.email)
+    if (existingUser) {
+      toast.error('Ya existe un usuario con este email')
       return false
     }
 
-    const newUserId = `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-
-    const newUser: User = {
-      id: newUserId,
-      name: userData.name,
-      email: userData.email,
-      userType: userData.userType || 'admin',
-      roleIds: userData.roleIds || [],
-      isActive: userData.isActive,
-      createdAt: new Date().toISOString(),
-      createdBy: userData.createdBy || 'local-system',
-      address: userData.address,
-      phone: userData.phone,
-      shareOnSales: userData.shareOnSales || 0,
-      shareOnProfits: userData.shareOnProfits || 0,
-      salesLimit: userData.salesLimit || 0,
-      parentId: userData.parentId
+    try {
+      await createUserMutation.mutateAsync(userData)
+      return true
+    } catch {
+      return false
     }
+  }, [users, createUserMutation])
 
-    let supabaseSuccess = false
-
-    // 2. Intentar crear en Supabase usando Edge Function
-    if (isSupabaseConfigured()) {
-      try {
-
-
-        // Obtener sesión para auth
-        const { data: session } = await supabase.auth.getSession()
-
-        if (!session?.session) {
-          toast.error('Debes estar autenticado para crear usuarios')
-          return false
-        }
-
-        const password = userData.password || '123456' // Contraseña por defecto
-
-        // Llamar a Edge Function
-        const response = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-user`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${session.session.access_token}`,
-            },
-            body: JSON.stringify({
-              name: userData.name,
-              email: userData.email,
-              password: password,
-              roleIds: userData.roleIds,
-              userType: userData.userType || 'admin',
-              isActive: userData.isActive ?? true,
-              address: userData.address || null,
-              phone: userData.phone || null,
-              shareOnSales: userData.shareOnSales || 0,
-              shareOnProfits: userData.shareOnProfits || 0,
-              salesLimit: userData.salesLimit || 0,
-              parentId: userData.parentId || null
-            })
-          }
-        )
-
-        const result = await response.json()
-
-        if (!response.ok) {
-          console.error('Error de Edge Function:', result)
-          throw new Error(result.error || 'Error al crear usuario')
-        }
-
-        // Usuario creado exitosamente
-        newUser.id = result.userId
-        supabaseSuccess = true
-
-        toast.success('Usuario creado en Authentication y base de datos')
-
-      } catch (error: any) {
-
-
-        // Manejo de errores específicos
-        if (error.message.includes('ya está registrado')) {
-          toast.error(`El email ${userData.email} ya está registrado`)
-          return false
-        }
-
-        toast.error(`Error: ${error.message}`)
-        return false
-      }
-    }
-
-    // 3. Guardar localmente
-    const updatedUsers = [...users, newUser]
-    setUsers(updatedUsers)
-    saveLocalUsers(updatedUsers)
-
-    if (!isSupabaseConfigured()) {
-      toast.success('Usuario creado localmente (Supabase no configurado)')
-    }
-
-    return true
-  }
-
-  // Actualizar usuario (Supabase + Local)
-  const updateUser = async (userId: string, userData: Partial<User>): Promise<boolean> => {
-    // Verificar si el email ya existe localmente (excluyendo el usuario actual)
+  // Actualizar usuario - mantiene la interfaz original
+  const updateUser = useCallback(async (userId: string, userData: Partial<User>): Promise<boolean> => {
+    // Verificar duplicados de email localmente
     if (userData.email) {
-      const existingLocalUser = users.find(u => u.email === userData.email && u.id !== userId)
-      if (existingLocalUser) {
+      const existingUser = users.find(u => u.email === userData.email && u.id !== userId)
+      if (existingUser) {
         toast.error('Ya existe otro usuario con este email')
         return false
       }
     }
 
-    let supabaseSuccess = false
-
-    // Intentar actualizar en Supabase primero
-    if (isSupabaseConfigured()) {
-      try {
-        // Verificar duplicados de email en Supabase si se está cambiando el email
-        if (userData.email) {
-          const { data: existingUsers, error: checkError } = await supabase
-            .from('users')
-            .select('id, email')
-            .eq('email', userData.email)
-            .neq('id', userId)
-
-          if (checkError) {
-            throw checkError
-          }
-
-          if (existingUsers && existingUsers.length > 0) {
-            toast.error('Este email ya está registrado en Supabase')
-            return false
-          }
-        }
-
-        const updateData: any = {}
-        if (userData.name !== undefined) updateData.name = userData.name
-        if (userData.email !== undefined) updateData.email = userData.email
-        if (userData.isActive !== undefined) updateData.is_active = userData.isActive
-        if (userData.address !== undefined) updateData.address = userData.address
-        if (userData.phone !== undefined) updateData.phone = userData.phone
-        if (userData.parentId !== undefined) updateData.parent_id = userData.parentId
-        if (userData.shareOnSales !== undefined) updateData.share_on_sales = userData.shareOnSales
-        if (userData.shareOnProfits !== undefined) updateData.share_on_profits = userData.shareOnProfits
-
-        const { error } = await supabase
-          .from('users')
-          .update(updateData)
-          .eq('id', userId)
-
-        if (error) {
-          // Manejar errores de duplicado específicamente
-          if (error.message.includes('duplicate key') || error.message.includes('unique constraint')) {
-            toast.error('Este email ya está registrado en Supabase')
-            return false
-          }
-          throw error
-        }
-
-        // Actualizar roles si se proporcionaron
-        if (userData.roleIds !== undefined) {
-          // Eliminar roles existentes
-          await supabase
-            .from('user_roles')
-            .delete()
-            .eq('user_id', userId)
-
-          // Insertar nuevos roles
-          if (userData.roleIds.length > 0) {
-            const userRoles = userData.roleIds.map(roleId => ({
-              user_id: userId,
-              role_id: roleId
-            }))
-
-            const { error: rolesError } = await supabase
-              .from('user_roles')
-              .insert(userRoles)
-
-            if (rolesError) {
-
-            }
-          }
-        }
-
-        supabaseSuccess = true
-
-      } catch (error: any) {
-
-
-        // Si es error de duplicado, no continuar
-        if (error.message.includes('duplicate key') || error.message.includes('unique constraint')) {
-          toast.error('Este email ya está registrado en Supabase')
-          return false
-        }
-
-        // Si es error de UUID inválido, es porque el usuario es local y no existe en Supabase
-        if (error.message.includes('invalid input syntax for type uuid')) {
-
-          // No mostramos error al usuario, es comportamiento esperado para usuarios legacy
-        } else {
-          toast.error(`Error en Supabase: ${error.message}. Actualizando solo localmente.`)
-        }
-      }
+    try {
+      await updateUserMutation.mutateAsync({ userId, userData })
+      return true
+    } catch {
+      return false
     }
+  }, [users, updateUserMutation])
 
-    // Actualizar localmente (siempre, si no hay errores de duplicado)
-    const updatedUsers = users.map(user =>
-      user.id === userId ? { ...user, ...userData } : user
-    )
-    setUsers(updatedUsers)
-    saveLocalUsers(updatedUsers)
-
-    // Mostrar mensaje apropiado
-    if (supabaseSuccess) {
-      toast.success('Usuario actualizado en Supabase y localmente')
-    } else if (!isSupabaseConfigured()) {
-      toast.success('Usuario actualizado localmente (Supabase no configurado)')
-    } else {
-      toast.success('Usuario actualizado localmente')
+  // Eliminar usuario - mantiene la interfaz original
+  const deleteUser = useCallback(async (userId: string): Promise<boolean> => {
+    try {
+      await deleteUserMutation.mutateAsync(userId)
+      return true
+    } catch {
+      return false
     }
-
-    return true
-  }
-
-  // Eliminar usuario (Auth + Public usando Edge Function)
-  const deleteUser = async (userId: string): Promise<boolean> => {
-    if (isSupabaseConfigured()) {
-      try {
-
-
-        // Llamar a Edge Function que elimina de Auth + Public
-        const { data: session } = await supabase.auth.getSession()
-
-        if (!session?.session) {
-          toast.error('Debes estar autenticado para eliminar usuarios')
-          return false
-        }
-
-        const response = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${session.session.access_token}`,
-            },
-            body: JSON.stringify({ userId })
-          }
-        )
-
-        const result = await response.json()
-
-        if (!response.ok) {
-          console.error('Error de Edge Function:', result)
-
-          // Fallback: Intentar método RPC tradicional
-
-          const { error: rpcError } = await supabase.rpc('delete_user_completely', {
-            target_user_id: userId
-          })
-
-          if (rpcError) {
-
-
-            // Último recurso: solo borrar de public
-            await supabase.from('user_roles').delete().eq('user_id', userId)
-            const { error: deleteError } = await supabase.from('users').delete().eq('id', userId)
-
-            if (deleteError) {
-              throw deleteError
-            }
-
-            toast.warning('Usuario eliminado de la base de datos, pero permanece en Auth (elimina manualmente desde Dashboard)')
-          } else {
-            toast.success('Usuario eliminado completamente')
-          }
-        } else {
-
-          toast.success('Usuario eliminado de Auth y base de datos')
-        }
-
-      } catch (error: any) {
-
-        toast.error(`Error: ${error.message}`)
-        return false
-      }
-    }
-
-    // Eliminar localmente
-    const updatedUsers = users.filter(user => user.id !== userId)
-    setUsers(updatedUsers)
-    saveLocalUsers(updatedUsers)
-
-    if (!isSupabaseConfigured()) {
-      toast.success('Usuario eliminado localmente')
-    }
-
-    return true
-  }
+  }, [deleteUserMutation])
 
   // Alternar estado del usuario
-  const toggleUserStatus = async (userId: string): Promise<boolean> => {
+  const toggleUserStatus = useCallback(async (userId: string): Promise<boolean> => {
     const user = users.find(u => u.id === userId)
     if (!user) return false
 
-    return await updateUser(userId, { isActive: !user.isActive })
-  }
+    try {
+      await toggleStatusMutation.mutateAsync({ userId, currentStatus: user.isActive })
+      return true
+    } catch {
+      return false
+    }
+  }, [users, toggleStatusMutation])
 
-  // Sincronizar usuarios locales con Supabase
-  const syncUsersToSupabase = async (): Promise<void> => {
+  // Sincronizar usuarios locales con Supabase (legacy - mantiene compatibilidad)
+  const syncUsersToSupabase = useCallback(async (): Promise<void> => {
     if (!isSupabaseConfigured()) {
       toast.error('Supabase no está configurado')
       return
     }
-
-    const localUsers = getLocalUsers()
-    let syncedCount = 0
-
-    for (const user of localUsers) {
-      try {
-        // Verificar si el usuario ya existe en Supabase
-        const { data: existingUsers } = await supabase
-          .from('users')
-          .select('id')
-          .eq('email', user.email)
-
-        if (!existingUsers || existingUsers.length === 0) {
-          // Crear usuario en Supabase
-          const password = 'changeme123'
-          const passwordHash = `hashed_${password}_${Date.now()}`
-
-          const { data: newSupabaseUser, error } = await supabase
-            .from('users')
-            .insert([
-              {
-                name: user.name,
-                email: user.email,
-                password_hash: passwordHash,
-                is_active: user.isActive,
-                created_by: null
-              }
-            ])
-            .select()
-
-          if (!error && newSupabaseUser && newSupabaseUser.length > 0) {
-            syncedCount++
-
-          }
-        }
-      } catch (error) {
-
-      }
-    }
-
-    if (syncedCount > 0) {
-      toast.success(`${syncedCount} usuarios sincronizados con Supabase`)
-      await loadUsers() // Recargar para obtener los IDs correctos
-    } else {
-      toast.info('Todos los usuarios ya están sincronizados')
-    }
-  }
+    toast.info('La sincronización ya no es necesaria con React Query')
+  }, [])
 
   // Limpiar usuarios duplicados en Supabase
-  const cleanDuplicateUsers = async (): Promise<void> => {
+  const cleanDuplicateUsers = useCallback(async (): Promise<void> => {
     if (!isSupabaseConfigured()) {
       toast.error('Supabase no está configurado')
       return
@@ -554,15 +126,12 @@ export function useSupabaseUsers() {
     try {
       toast.info('Limpiando usuarios duplicados...')
 
-      // Obtener todos los usuarios
       const { data: allUsers, error: fetchError } = await supabase
         .from('users')
         .select('id, name, email, created_at')
         .order('created_at', { ascending: true })
 
       if (fetchError) throw fetchError
-
-
 
       // Agrupar por email
       const emailGroups: { [key: string]: any[] } = {}
@@ -578,78 +147,54 @@ export function useSupabaseUsers() {
 
       if (duplicateEmails.length === 0) {
         toast.success('No se encontraron duplicados')
-
         return
       }
-
-
 
       let deletedCount = 0
 
       for (const email of duplicateEmails) {
         const duplicateUsers = emailGroups[email]
-
-        // Mantener el más antiguo
         duplicateUsers.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-        const keepUser = duplicateUsers[0]
         const deleteUsers = duplicateUsers.slice(1)
-
-
 
         for (const user of deleteUsers) {
           try {
-            // Eliminar relaciones primero
             await supabase.from('bets').delete().eq('user_id', user.id)
             await supabase.from('taquilla_sales').delete().eq('created_by', user.id)
             await supabase.from('api_keys').delete().eq('created_by', user.id)
             await supabase.from('taquillas').update({ activated_by: null }).eq('activated_by', user.id)
             await supabase.from('transfers').update({ created_by: null }).eq('created_by', user.id)
             await supabase.from('withdrawals').update({ created_by: null }).eq('created_by', user.id)
+            await supabase.from('user_roles').delete().eq('user_id', user.id)
 
-            await supabase
-              .from('user_roles')
-              .delete()
-              .eq('user_id', user.id)
-
-            // Eliminar usuario
             const { error: deleteError } = await supabase
               .from('users')
               .delete()
               .eq('id', user.id)
 
-            if (deleteError) {
-
-            } else {
+            if (!deleteError) {
               deletedCount++
-
             }
           } catch (error) {
-
+            console.error('Error eliminando usuario duplicado:', error)
           }
         }
       }
 
       toast.success(`Limpieza completada! ${deletedCount} usuarios duplicados eliminados`)
 
-
       // Recargar usuarios
       await loadUsers()
 
     } catch (error: any) {
-
       toast.error(`Error limpiando duplicados: ${error.message}`)
     }
-  }
-
-  // Cargar usuarios al montar el componente
-  useEffect(() => {
-    loadUsers()
   }, [loadUsers])
 
   return {
     users,
     isLoading,
-    error,
+    error: error?.message || null,
     loadUsers,
     createUser,
     updateUser,

@@ -4,7 +4,12 @@
       "Bash(npm run build:*)",
       "mcp__ide__getDiagnostics",
       "Bash(npx tsc:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(dir:*)",
+      "Bash(findstr:*)",
+      "Bash(cat:*)",
+      "Bash(node scripts/diagnose-winners.mjs:*)",
+      "Bash(node -e:*)"
     ],
     "deny": [],
     "ask": []
