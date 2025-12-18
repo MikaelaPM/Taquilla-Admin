@@ -3,8 +3,8 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Calendar } from '@/components/ui/calendar'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Progress } from '@/components/ui/progress'
 import { useApp } from '@/contexts/AppContext'
@@ -12,7 +12,6 @@ import { useBetsStats } from '@/hooks/use-bets-stats'
 import { useSalesStats } from '@/hooks/use-sales-stats'
 import { formatCurrency } from '@/lib/pot-utils'
 import { format, startOfDay, endOfDay, startOfWeek, startOfMonth, parseISO } from 'date-fns'
-import { es } from 'date-fns/locale'
 import {
   ChartBar,
   Trophy,
@@ -37,11 +36,6 @@ export function ReportsPage() {
   const { stats: salesStats, loading: salesLoading, refresh: refreshSales } = useSalesStats({ visibleTaquillaIds })
 
   const [periodFilter, setPeriodFilter] = useState<'today' | 'week' | 'month' | 'custom'>('month')
-  const [customDateRange, setCustomDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
-    from: undefined,
-    to: undefined
-  })
-  const [datePickerOpen, setDatePickerOpen] = useState(false)
   const [selectedLottery, setSelectedLottery] = useState<string>('all')
 
   // Calcular fechas de filtros
@@ -50,7 +44,13 @@ export function ReportsPage() {
   const weekStart = startOfWeek(now, { weekStartsOn: 1 })
   const monthStart = startOfMonth(now)
 
-  // Filtrar resultados por período
+  // Estado de fechas - inicializado con "Este Mes"
+  const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({
+    from: monthStart,
+    to: todayStart
+  })
+
+  // Filtrar resultados por período usando dateRange
   const filteredResults = useMemo(() => {
     return dailyResults.filter(result => {
       const resultDate = parseISO(result.resultDate)
@@ -60,23 +60,14 @@ export function ReportsPage() {
         return false
       }
 
-      // Filtro por período
-      if (periodFilter === 'today') {
-        return resultDate >= todayStart
-      } else if (periodFilter === 'week') {
-        return resultDate >= weekStart
-      } else if (periodFilter === 'month') {
-        return resultDate >= monthStart
-      } else if (periodFilter === 'custom' && customDateRange.from) {
-        const fromDate = startOfDay(customDateRange.from)
-        const toDate = customDateRange.to ? endOfDay(customDateRange.to) : endOfDay(customDateRange.from)
-        return resultDate >= fromDate && resultDate <= toDate
-      }
-      return true
+      // Filtro por rango de fechas
+      const fromDate = startOfDay(dateRange.from)
+      const toDate = endOfDay(dateRange.to)
+      return resultDate >= fromDate && resultDate <= toDate
     })
-  }, [dailyResults, periodFilter, selectedLottery, todayStart, weekStart, monthStart, customDateRange])
+  }, [dailyResults, selectedLottery, dateRange])
 
-  // Filtrar ganadores por período
+  // Filtrar ganadores por período usando dateRange
   const filteredWinners = useMemo(() => {
     return winners.filter(winner => {
       const winnerDate = new Date(winner.createdAt)
@@ -86,21 +77,12 @@ export function ReportsPage() {
         return false
       }
 
-      // Filtro por período
-      if (periodFilter === 'today') {
-        return winnerDate >= todayStart
-      } else if (periodFilter === 'week') {
-        return winnerDate >= weekStart
-      } else if (periodFilter === 'month') {
-        return winnerDate >= monthStart
-      } else if (periodFilter === 'custom' && customDateRange.from) {
-        const fromDate = startOfDay(customDateRange.from)
-        const toDate = customDateRange.to ? endOfDay(customDateRange.to) : endOfDay(customDateRange.from)
-        return winnerDate >= fromDate && winnerDate <= toDate
-      }
-      return true
+      // Filtro por rango de fechas
+      const fromDate = startOfDay(dateRange.from)
+      const toDate = endOfDay(dateRange.to)
+      return winnerDate >= fromDate && winnerDate <= toDate
     })
-  }, [winners, periodFilter, selectedLottery, todayStart, weekStart, monthStart, customDateRange])
+  }, [winners, selectedLottery, dateRange])
 
   // Estadísticas principales - usando datos filtrados por taquillas visibles
   const stats = useMemo(() => {
@@ -156,7 +138,7 @@ export function ReportsPage() {
       totalBetAmount,
       periodSales
     }
-  }, [filteredResults, filteredWinners, periodFilter, salesStats])
+  }, [filteredResults, filteredWinners, periodFilter, salesStats, dateRange])
 
   // Top loterías por premios pagados - usando filteredWinners (filtrado por taquillas visibles)
   const topLotteries = useMemo(() => {
@@ -227,75 +209,65 @@ export function ReportsPage() {
 
   // Cargar estadísticas de apuestas cuando cambien los filtros
   useEffect(() => {
-    const now = new Date()
-    let startDate: string | undefined
-    let endDate: string | undefined
-
-    if (periodFilter === 'today') {
-      startDate = startOfDay(now).toISOString()
-    } else if (periodFilter === 'week') {
-      startDate = startOfWeek(now, { weekStartsOn: 1 }).toISOString()
-    } else if (periodFilter === 'month') {
-      startDate = startOfMonth(now).toISOString()
-    } else if (periodFilter === 'custom' && customDateRange.from) {
-      startDate = startOfDay(customDateRange.from).toISOString()
-      endDate = customDateRange.to ? endOfDay(customDateRange.to).toISOString() : endOfDay(customDateRange.from).toISOString()
-    }
-
     loadBetsStats({
-      startDate,
-      endDate,
+      startDate: startOfDay(dateRange.from).toISOString(),
+      endDate: endOfDay(dateRange.to).toISOString(),
       lotteryId: selectedLottery
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [periodFilter, selectedLottery, customDateRange.from, customDateRange.to])
+  }, [dateRange, selectedLottery])
 
   const getPeriodLabel = () => {
     switch (periodFilter) {
       case 'today': return 'Hoy'
       case 'week': return 'Esta Semana'
       case 'month': return 'Este Mes'
-      case 'custom':
-        if (customDateRange.from && customDateRange.to) {
-          return `${format(customDateRange.from, 'dd/MM/yyyy')} - ${format(customDateRange.to, 'dd/MM/yyyy')}`
-        } else if (customDateRange.from) {
-          return format(customDateRange.from, 'dd/MM/yyyy')
-        }
-        return 'Personalizado'
+      case 'custom': return 'Personalizado'
       default: return 'Este Mes'
     }
   }
 
-  const handleCustomDateSelect = (range: { from: Date | undefined; to: Date | undefined } | undefined) => {
-    if (range) {
-      setCustomDateRange(range)
-      if (range.from) {
-        setPeriodFilter('custom')
-      }
+  // Handlers para filtros rápidos - actualizan dateRange
+  const handlePeriodClick = (period: 'today' | 'week' | 'month') => {
+    setPeriodFilter(period)
+    if (period === 'today') {
+      setDateRange({ from: todayStart, to: todayStart })
+    } else if (period === 'week') {
+      setDateRange({ from: weekStart, to: todayStart })
+    } else if (period === 'month') {
+      setDateRange({ from: monthStart, to: todayStart })
+    }
+  }
+
+  // Handlers para inputs de fecha - deseleccionan filtros rápidos
+  const handleFromDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.value) {
+      const date = new Date(e.target.value + 'T00:00:00')
+      setDateRange(prev => ({
+        from: date,
+        to: prev.to < date ? date : prev.to
+      }))
+      setPeriodFilter('custom')
+    }
+  }
+
+  const handleToDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.value) {
+      const date = new Date(e.target.value + 'T00:00:00')
+      setDateRange(prev => ({
+        from: prev.from > date ? date : prev.from,
+        to: date
+      }))
+      setPeriodFilter('custom')
     }
   }
 
   const handleRefresh = () => {
     loadDailyResults()
-    refreshSales() // Recargar estadísticas de ventas filtradas
-    // Recargar estadísticas de apuestas con los filtros actuales
-    let startDate: string | undefined
-    let endDate: string | undefined
-
-    if (periodFilter === 'today') {
-      startDate = todayStart.toISOString()
-    } else if (periodFilter === 'week') {
-      startDate = weekStart.toISOString()
-    } else if (periodFilter === 'month') {
-      startDate = monthStart.toISOString()
-    } else if (periodFilter === 'custom' && customDateRange.from) {
-      startDate = startOfDay(customDateRange.from).toISOString()
-      endDate = customDateRange.to ? endOfDay(customDateRange.to).toISOString() : endOfDay(customDateRange.from).toISOString()
-    }
-
+    refreshSales()
     loadBetsStats({
-      startDate,
-      endDate,
+      startDate: startOfDay(dateRange.from).toISOString(),
+      endDate: endOfDay(dateRange.to).toISOString(),
       lotteryId: selectedLottery
     })
   }
@@ -348,7 +320,7 @@ export function ReportsPage() {
           <Button
             variant={periodFilter === 'today' ? 'default' : 'outline'}
             size="sm"
-            onClick={() => setPeriodFilter('today')}
+            onClick={() => handlePeriodClick('today')}
             className="cursor-pointer"
           >
             Hoy
@@ -356,7 +328,7 @@ export function ReportsPage() {
           <Button
             variant={periodFilter === 'week' ? 'default' : 'outline'}
             size="sm"
-            onClick={() => setPeriodFilter('week')}
+            onClick={() => handlePeriodClick('week')}
             className="cursor-pointer"
           >
             Esta Semana
@@ -364,59 +336,37 @@ export function ReportsPage() {
           <Button
             variant={periodFilter === 'month' ? 'default' : 'outline'}
             size="sm"
-            onClick={() => setPeriodFilter('month')}
+            onClick={() => handlePeriodClick('month')}
             className="cursor-pointer"
           >
             Este Mes
           </Button>
 
-          <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                variant={periodFilter === 'custom' ? 'default' : 'outline'}
-                size="sm"
-                className="cursor-pointer gap-2"
-              >
-                <CalendarBlank className="h-4 w-4" />
-                {periodFilter === 'custom' && customDateRange.from
-                  ? customDateRange.to
-                    ? `${format(customDateRange.from, 'dd/MM')} - ${format(customDateRange.to, 'dd/MM')}`
-                    : format(customDateRange.from, 'dd/MM/yyyy')
-                  : 'Personalizado'
-                }
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar
-                mode="range"
-                selected={customDateRange}
-                onSelect={handleCustomDateSelect}
-                locale={es}
-                numberOfMonths={2}
-                disabled={(date) => date > new Date()}
+          <div className="flex items-center gap-2 ml-2 pl-2 border-l">
+            <div className="flex items-center gap-1">
+              <Label htmlFor="from-date" className="text-xs text-muted-foreground whitespace-nowrap">Desde:</Label>
+              <Input
+                id="from-date"
+                type="date"
+                className="h-8 w-[130px] text-xs"
+                value={format(dateRange.from, 'yyyy-MM-dd')}
+                onChange={handleFromDateChange}
+                max={format(new Date(), 'yyyy-MM-dd')}
               />
-              <div className="p-3 border-t flex justify-end gap-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setCustomDateRange({ from: undefined, to: undefined })
-                    setPeriodFilter('month')
-                    setDatePickerOpen(false)
-                  }}
-                >
-                  Limpiar
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={() => setDatePickerOpen(false)}
-                  disabled={!customDateRange.from}
-                >
-                  Aplicar
-                </Button>
-              </div>
-            </PopoverContent>
-          </Popover>
+            </div>
+            <div className="flex items-center gap-1">
+              <Label htmlFor="to-date" className="text-xs text-muted-foreground whitespace-nowrap">Hasta:</Label>
+              <Input
+                id="to-date"
+                type="date"
+                className="h-8 w-[130px] text-xs"
+                value={format(dateRange.to, 'yyyy-MM-dd')}
+                onChange={handleToDateChange}
+                min={format(dateRange.from, 'yyyy-MM-dd')}
+                max={format(new Date(), 'yyyy-MM-dd')}
+              />
+            </div>
+          </div>
         </div>
       </div>
 
