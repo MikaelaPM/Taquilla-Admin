@@ -7,7 +7,9 @@
       "Bash(grep:*)",
       "Bash(dir:*)",
       "Bash(findstr:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(node scripts/diagnose-winners.mjs:*)",
+      "Bash(node -e:*)"
     ],
     "deny": [],
     "ask": []

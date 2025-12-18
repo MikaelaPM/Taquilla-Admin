@@ -282,11 +282,13 @@ export function useDailyResults() {
 
   /**
    * Obtiene los ganadores de un resultado específico
-   * Busca en bets_item_lottery_clasic los items con status 'winner' y el prize_id correspondiente
+   * Busca en bets_item_lottery_clasic los items con status 'winner' o 'paid' y el prize_id correspondiente
+   * No filtra por fecha ya que las apuestas pueden haberse creado el día anterior (plays_tomorrow)
+   * Incluye 'paid' porque los ganadores que ya fueron pagados cambian de 'winner' a 'paid'
    */
   const getWinnersForResult = useCallback(async (
     prizeId: string,
-    resultDate: string
+    _resultDate: string
   ): Promise<Array<{
     id: string
     amount: number
@@ -296,40 +298,22 @@ export function useDailyResults() {
     createdAt: string
   }>> => {
     try {
-      const dateObj = parseISO(resultDate)
-      const dayStart = startOfDay(dateObj).toISOString()
-      const dayEnd = endOfDay(dateObj).toISOString()
-
-      // 1. Obtener bets del día
-      const { data: betsOfDay, error: betsError } = await supabase
-        .from('bets')
-        .select('id, user_id, created_at')
-        .gte('created_at', dayStart)
-        .lte('created_at', dayEnd)
-
-      if (betsError || !betsOfDay || betsOfDay.length === 0) {
-        return []
-      }
-
-      const betIds = betsOfDay.map(b => b.id)
-      const betMap = new Map<string, { userId: string | null; createdAt: string }>(
-        betsOfDay.map(b => [b.id, { userId: b.user_id, createdAt: b.created_at }])
-      )
-
-      // 2. Buscar items ganadores
+      // 1. Buscar directamente los items ganadores por prize_id y status 'winner' o 'paid'
+      // No filtramos por fecha porque las apuestas pueden haberse creado el día anterior
+      // (en caso de loterías con plays_tomorrow = true)
+      // Incluimos 'paid' porque los ganadores ya pagados tienen ese status
       const { data: winningItems, error: itemsError } = await supabase
         .from('bets_item_lottery_clasic')
-        .select('id, bets_id, amount, potential_bet_amount')
-        .in('bets_id', betIds)
+        .select('id, bets_id, user_id, amount, potential_bet_amount, created_at')
         .eq('prize_id', prizeId)
-        .eq('status', 'winner')
+        .in('status', ['winner', 'paid'])
 
-      if (itemsError || !winningItems) {
+      if (itemsError || !winningItems || winningItems.length === 0) {
         return []
       }
 
-      // 3. Obtener información de usuarios (taquillas)
-      const userIds = [...new Set(betsOfDay.map(b => b.user_id).filter(Boolean))]
+      // 2. Obtener información de usuarios (taquillas) desde los items directamente
+      const userIds = [...new Set(winningItems.map(w => w.user_id).filter(Boolean))]
 
       let usersMap = new Map<string, string>()
       if (userIds.length > 0) {
@@ -343,10 +327,9 @@ export function useDailyResults() {
         }
       }
 
-      // 4. Mapear resultados
+      // 3. Mapear resultados
       return winningItems.map(item => {
-        const betInfo = betMap.get(item.bets_id)
-        const taquillaId = betInfo?.userId || ''
+        const taquillaId = item.user_id || ''
         const taquillaName = usersMap.get(taquillaId) || 'Desconocida'
 
         return {
@@ -355,7 +338,7 @@ export function useDailyResults() {
           potentialWin: Number(item.potential_bet_amount) || 0,
           taquillaId,
           taquillaName,
-          createdAt: betInfo?.createdAt || ''
+          createdAt: item.created_at || ''
         }
       })
     } catch (err) {
