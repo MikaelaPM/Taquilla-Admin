@@ -6,9 +6,10 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Plus, PencilSimpleLine, X, MagnifyingGlass, CheckCircle, XCircle, Warning, MapPin, Envelope, CalendarBlank, Storefront, Phone, Buildings, Info } from '@phosphor-icons/react'
+import { Plus, PencilSimpleLine, X, MagnifyingGlass, CheckCircle, XCircle, Warning, MapPin, Envelope, CalendarBlank, Storefront, Phone, Buildings, Info, ChartBar } from '@phosphor-icons/react'
 import { TaquillaDialog } from '@/components/TaquillaDialog'
 import { TaquillaEditDialog } from '@/components/TaquillaEditDialog'
+import { TaquillaStatsDialog } from '@/components/TaquillaStatsDialog'
 import { Taquilla } from '@/lib/types'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
@@ -37,6 +38,8 @@ export function AgenciaTaquillasPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [taquillaToDelete, setTaquillaToDelete] = useState<Taquilla | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [statsDialogOpen, setStatsDialogOpen] = useState(false)
+  const [statsTaquilla, setStatsTaquilla] = useState<Taquilla | null>(null)
 
   const comercializadora = comercializadoras.find(c => c.id === comercializadoraId)
   const agency = agencies.find(a => a.id === agencyId)
@@ -106,6 +109,11 @@ export function AgenciaTaquillasPage() {
   const handleDeleteClick = (taquilla: Taquilla) => {
     setTaquillaToDelete(taquilla)
     setDeleteDialogOpen(true)
+  }
+
+  const handleStatsClick = (taquilla: Taquilla) => {
+    setStatsTaquilla(taquilla)
+    setStatsDialogOpen(true)
   }
 
   const confirmDelete = async () => {
@@ -339,6 +347,13 @@ export function AgenciaTaquillasPage() {
                   </div>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
                     <button
+                      className="h-7 w-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
+                      onClick={() => handleStatsClick(taquilla)}
+                      title="Ver Reportes"
+                    >
+                      <ChartBar className="h-4 w-4" />
+                    </button>
+                    <button
                       className="h-7 w-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer"
                       onClick={() => handleEdit(taquilla)}
                       title="Editar"
@@ -466,6 +481,13 @@ export function AgenciaTaquillasPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Diálogo de estadísticas de taquilla */}
+      <TaquillaStatsDialog
+        open={statsDialogOpen}
+        onOpenChange={setStatsDialogOpen}
+        taquilla={statsTaquilla}
+      />
     </div>
   )
 }
