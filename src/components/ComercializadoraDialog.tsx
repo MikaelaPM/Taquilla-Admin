@@ -4,16 +4,19 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Comercializadora, User } from "@/lib/types"
 import { toast } from "sonner"
 
 interface ComercializadoraDialogProps {
     open: boolean
     onOpenChange: (open: boolean) => void
-    onSave: (comercializadora: Omit<Comercializadora, 'id' | 'createdAt'>) => Promise<boolean>
-    comercializadora?: Comercializadora
+    onSave: (comercializadora: Omit<Comercializadora, 'id' | 'createdAt'> & { parentId?: string }) => Promise<boolean>
+    comercializadora?: Comercializadora & { parentId?: string }
     currentUserId?: string
     createUser?: (userData: Omit<User, 'id' | 'createdAt'>) => Promise<boolean>
+    isSuperAdmin?: boolean
+    users?: User[]
 }
 
 export function ComercializadoraDialog({
@@ -22,7 +25,9 @@ export function ComercializadoraDialog({
     onSave,
     comercializadora,
     currentUserId,
-    createUser
+    createUser,
+    isSuperAdmin = false,
+    users = []
 }: ComercializadoraDialogProps) {
     const [name, setName] = useState('')
     const [email, setEmail] = useState('')
@@ -32,6 +37,10 @@ export function ComercializadoraDialog({
     const [shareOnProfits, setShareOnProfits] = useState(0)
     const [isActive, setIsActive] = useState(true)
     const [isSaving, setIsSaving] = useState(false)
+    const [selectedParentId, setSelectedParentId] = useState<string>('')
+
+    // Filtrar usuarios admin para el selector de parentId
+    const adminUsers = users.filter(u => u.userType === 'admin' || !u.userType)
 
     useEffect(() => {
         if (comercializadora) {
@@ -42,10 +51,11 @@ export function ComercializadoraDialog({
             setShareOnProfits(comercializadora.shareOnProfits || 0)
             setIsActive(comercializadora.isActive)
             setPassword('')
+            setSelectedParentId(comercializadora.parentId || currentUserId || '')
         } else {
             resetForm()
         }
-    }, [comercializadora, open])
+    }, [comercializadora, open, currentUserId])
 
     const resetForm = () => {
         setName('')
@@ -55,6 +65,7 @@ export function ComercializadoraDialog({
         setShareOnSales(0)
         setShareOnProfits(0)
         setIsActive(true)
+        setSelectedParentId(currentUserId || '')
     }
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -91,6 +102,8 @@ export function ComercializadoraDialog({
             // Si es una nueva comercializadora, crear el usuario primero
             if (!comercializadora && createUser) {
                 try {
+                    // Usar el parentId seleccionado si es superadmin, sino usar currentUserId
+                    const parentIdToUse = isSuperAdmin && selectedParentId ? selectedParentId : currentUserId
                     const userCreated = await createUser({
                         name: name.trim(),
                         email: email.trim(),
@@ -99,7 +112,7 @@ export function ComercializadoraDialog({
                         roleIds: [],
                         isActive: isActive,
                         createdBy: currentUserId || 'system',
-                        parentId: currentUserId, // Asociar la comercializadora al usuario que la registra
+                        parentId: parentIdToUse, // Asociar la comercializadora al usuario seleccionado
                         address: address.trim() || undefined,
                         shareOnSales: shareOnSales,
                         shareOnProfits: shareOnProfits
@@ -125,6 +138,8 @@ export function ComercializadoraDialog({
             }
 
             // Si estamos editando, usar onSave
+            // Usar el parentId seleccionado si es superadmin, sino mantener el existente
+            const parentIdToUse = isSuperAdmin && selectedParentId ? selectedParentId : comercializadora?.parentId
             const success = await onSave({
                 name: name.trim(),
                 email: email.trim(),
@@ -133,6 +148,7 @@ export function ComercializadoraDialog({
                 shareOnProfits,
                 isActive,
                 createdBy: currentUserId,
+                parentId: parentIdToUse,
             })
 
             if (success) {
@@ -203,6 +219,31 @@ export function ComercializadoraDialog({
                                 required
                                 minLength={6}
                             />
+                        </div>
+                    )}
+
+                    {/* Selector de usuario padre - solo para superadmin */}
+                    {isSuperAdmin && adminUsers.length > 0 && (
+                        <div className="space-y-2">
+                            <Label htmlFor="parentId">Asociar a Usuario</Label>
+                            <Select
+                                value={selectedParentId}
+                                onValueChange={setSelectedParentId}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Selecciona un usuario" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {adminUsers.map((user) => (
+                                        <SelectItem key={user.id} value={user.id}>
+                                            {user.name} ({user.email})
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <p className="text-xs text-muted-foreground">
+                                El usuario seleccionado será el responsable de esta comercializadora
+                            </p>
                         </div>
                     )}
 

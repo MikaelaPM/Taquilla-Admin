@@ -13,14 +13,16 @@ import { es } from "date-fns/locale"
 import { toast } from "sonner"
 
 interface ComercializadorasTabProps {
-    comercializadoras: Comercializadora[]
+    comercializadoras: (Comercializadora & { parentId?: string })[]
     agencies: Agency[]
     isLoading: boolean
     onCreate: (comercializadora: Omit<Comercializadora, 'id' | 'createdAt'>) => Promise<boolean>
-    onUpdate: (id: string, updates: Partial<Omit<Comercializadora, 'id' | 'createdAt'>>) => Promise<boolean>
+    onUpdate: (id: string, updates: Partial<Omit<Comercializadora, 'id' | 'createdAt'> & { parentId?: string }>) => Promise<boolean>
     onDelete: (id: string) => Promise<void>
     currentUserId?: string
     createUser?: (userData: Omit<User, 'id' | 'createdAt'>) => Promise<boolean>
+    isSuperAdmin?: boolean
+    users?: User[]
 }
 
 export function ComercializadorasTab({
@@ -31,11 +33,13 @@ export function ComercializadorasTab({
     onUpdate,
     onDelete,
     currentUserId,
-    createUser
+    createUser,
+    isSuperAdmin = false,
+    users = []
 }: ComercializadorasTabProps) {
     const navigate = useNavigate()
     const [dialogOpen, setDialogOpen] = useState(false)
-    const [editingComercializadora, setEditingComercializadora] = useState<Comercializadora | undefined>()
+    const [editingComercializadora, setEditingComercializadora] = useState<(Comercializadora & { parentId?: string }) | undefined>()
     const [search, setSearch] = useState('')
     const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -290,6 +294,8 @@ export function ComercializadorasTab({
                 comercializadora={editingComercializadora}
                 currentUserId={currentUserId}
                 createUser={createUser}
+                isSuperAdmin={isSuperAdmin}
+                users={users}
             />
 
             {/* Diálogo de confirmación para eliminar */}

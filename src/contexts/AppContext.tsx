@@ -439,7 +439,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       address: updates.address,
       shareOnSales: updates.shareOnSales,
       shareOnProfits: updates.shareOnProfits,
-      isActive: updates.isActive
+      isActive: updates.isActive,
+      parentId: updates.parentId
     })
   }
 

@@ -14,8 +14,12 @@ export function ComercializadorasPage() {
     currentUserId,
     currentUser,
     createUser,
-    agencies
+    agencies,
+    users
   } = useApp()
+
+  // Determinar si el usuario actual es superadmin (tiene permiso '*')
+  const isSuperAdmin = currentUser?.all_permissions?.includes('*') ?? false
 
   const navigate = useNavigate()
 
@@ -54,6 +58,8 @@ export function ComercializadorasPage() {
       }}
       currentUserId={currentUserId}
       createUser={createUser}
+      isSuperAdmin={isSuperAdmin}
+      users={users}
     />
   )
 }
