@@ -6,6 +6,8 @@ export interface SalesStats {
   // Ventas del día (excluyendo jugadas canceladas)
   todaySales: number
   todayBetsCount: number
+  // Comisiones totales de taquillas del día
+  todayTaquillaCommissions: number
   // Ventas de la semana (excluyendo jugadas canceladas)
   weekSales: number
   weekBetsCount: number
@@ -18,6 +20,8 @@ export interface SalesStats {
     taquillaName: string
     sales: number
     betsCount: number
+    shareOnSales: number
+    commission: number
   }>
 }
 
@@ -30,6 +34,7 @@ export function useSalesStats(options?: UseSalesStatsOptions) {
   const [stats, setStats] = useState<SalesStats>({
     todaySales: 0,
     todayBetsCount: 0,
+    todayTaquillaCommissions: 0,
     weekSales: 0,
     weekBetsCount: 0,
     monthSales: 0,
@@ -52,6 +57,7 @@ export function useSalesStats(options?: UseSalesStatsOptions) {
         setStats({
           todaySales: 0,
           todayBetsCount: 0,
+          todayTaquillaCommissions: 0,
           weekSales: 0,
           weekBetsCount: 0,
           monthSales: 0,
@@ -102,29 +108,41 @@ export function useSalesStats(options?: UseSalesStatsOptions) {
         }
       })
 
-      // Obtener nombres de taquillas
+      // Obtener nombres y shareOnSales de taquillas
       const taquillaIds = Array.from(taquillaMap.keys())
-      let taquillaNamesMap = new Map<string, string>()
+      let taquillaInfoMap = new Map<string, { name: string; shareOnSales: number }>()
 
       if (taquillaIds.length > 0) {
         const { data: users } = await supabase
           .from('users')
-          .select('id, name')
+          .select('id, name, share_on_sales')
           .in('id', taquillaIds)
 
         if (users) {
-          taquillaNamesMap = new Map(users.map(u => [u.id, u.name]))
+          taquillaInfoMap = new Map(users.map(u => [u.id, {
+            name: u.name,
+            shareOnSales: Number(u.share_on_sales) || 0
+          }]))
         }
       }
 
       const salesByTaquilla = Array.from(taquillaMap.entries())
-        .map(([taquillaId, data]) => ({
-          taquillaId,
-          taquillaName: taquillaNamesMap.get(taquillaId) || 'Desconocida',
-          sales: data.sales,
-          betsCount: data.betsCount
-        }))
+        .map(([taquillaId, data]) => {
+          const info = taquillaInfoMap.get(taquillaId) || { name: 'Desconocida', shareOnSales: 0 }
+          const commission = data.sales * (info.shareOnSales / 100)
+          return {
+            taquillaId,
+            taquillaName: info.name,
+            sales: data.sales,
+            betsCount: data.betsCount,
+            shareOnSales: info.shareOnSales,
+            commission
+          }
+        })
         .sort((a, b) => b.sales - a.sales)
+
+      // Calcular comisiones totales de taquillas del día
+      const todayTaquillaCommissions = salesByTaquilla.reduce((sum, t) => sum + t.commission, 0)
 
       // Ventas de la semana (excluyendo jugadas canceladas)
       let weekQuery = supabase
@@ -171,6 +189,7 @@ export function useSalesStats(options?: UseSalesStatsOptions) {
       setStats({
         todaySales,
         todayBetsCount,
+        todayTaquillaCommissions,
         weekSales,
         weekBetsCount,
         monthSales,
