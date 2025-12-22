@@ -13,7 +13,7 @@ interface Props {
   open: boolean
   taquilla?: Taquilla
   onOpenChange: (v: boolean) => void
-  onSave: (id: string, updates: { fullName: string; address: string; telefono: string; email: string; agencyId?: string; isApproved: boolean; shareOnSales: number; shareOnProfits: number; salesLimit: number }) => Promise<boolean>
+  onSave: (id: string, updates: { fullName: string; address: string; telefono: string; email: string; agencyId?: string; isApproved: boolean; shareOnSales: number; shareOnProfits: number; salesLimit: number; password?: string }) => Promise<boolean>
   agencies?: Agency[]
 }
 
@@ -22,6 +22,7 @@ export function TaquillaEditDialog({ open, taquilla, onOpenChange, onSave, agenc
   const [address, setAddress] = useState('')
   const [telefono, setTelefono] = useState('')
   const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [agencyId, setAgencyId] = useState<string | undefined>(undefined)
   const [shareOnSales, setShareOnSales] = useState('')
   const [shareOnProfits, setShareOnProfits] = useState('')
@@ -45,6 +46,7 @@ export function TaquillaEditDialog({ open, taquilla, onOpenChange, onSave, agenc
       setAddress(taquilla.address)
       setTelefono(taquilla.telefono || '')
       setEmail(taquilla.email)
+      setPassword('')
       setAgencyId(taquilla.parentId)
       setShareOnSales((taquilla.shareOnSales || 0).toString())
       setShareOnProfits((taquilla.shareOnProfits || 0).toString())
@@ -70,6 +72,11 @@ export function TaquillaEditDialog({ open, taquilla, onOpenChange, onSave, agenc
       newErrors.email = 'El correo es obligatorio'
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       newErrors.email = 'Correo electrónico inválido'
+    }
+
+    // Validar contraseña si se proporciona (mínimo 6 caracteres)
+    if (password.trim() && password.length < 6) {
+      newErrors.password = 'Mínimo 6 caracteres'
     }
 
     // Validar porcentajes contra los límites de la agencia
@@ -112,7 +119,9 @@ export function TaquillaEditDialog({ open, taquilla, onOpenChange, onSave, agenc
       isApproved: isActive,
       shareOnSales: parseFloat(shareOnSales) || 0,
       shareOnProfits: parseFloat(shareOnProfits) || 0,
-      salesLimit: parseFloat(salesLimit) || 0
+      salesLimit: parseFloat(salesLimit) || 0,
+      // Solo incluir password si se proporcionó
+      ...(password.trim() && { password: password.trim() })
     })
     setSaving(false)
     if (ok) onOpenChange(false)
@@ -190,6 +199,25 @@ export function TaquillaEditDialog({ open, taquilla, onOpenChange, onSave, agenc
             {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
           </div>
 
+          {/* Contraseña (opcional al editar) */}
+          <div className="grid gap-2">
+            <Label>Contraseña</Label>
+            <Input
+              type="password"
+              value={password}
+              onChange={e => {
+                setPassword(e.target.value)
+                if (errors.password) setErrors({ ...errors, password: '' })
+              }}
+              placeholder="Dejar vacío para mantener la actual"
+              className={errors.password ? "border-destructive" : ""}
+              autoComplete="new-password"
+            />
+            {errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
+            <p className="text-xs text-muted-foreground">
+              Solo se actualizará si ingresas una nueva contraseña
+            </p>
+          </div>
 
           {/* Porcentajes */}
           <div className="grid grid-cols-2 gap-4">

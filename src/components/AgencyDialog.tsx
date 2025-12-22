@@ -78,6 +78,11 @@ export function AgencyDialog({ open, onOpenChange, onSave, comercializadoras, ag
 
             if (!password.trim()) newErrors.password = 'La contraseña es obligatoria'
             else if (password.length < 6) newErrors.password = 'Mínimo 6 caracteres'
+        } else {
+            // Al editar, si se proporciona contraseña debe tener mínimo 6 caracteres
+            if (password.trim() && password.length < 6) {
+                newErrors.password = 'Mínimo 6 caracteres'
+            }
         }
 
         // Validar porcentajes contra los límites de la comercializadora
@@ -114,9 +119,14 @@ export function AgencyDialog({ open, onOpenChange, onSave, comercializadoras, ag
             shareOnSales: parseFloat(shareOnSales),
             shareOnProfits: parseFloat(shareOnProfits),
             isActive,
+            // Al crear: incluir email y password
             ...((!agency && email && password) && {
                 userEmail: email,
                 userPassword: password
+            }),
+            // Al editar: incluir password solo si se proporcionó
+            ...(agency && password.trim() && {
+                password: password.trim()
             })
         }
 
@@ -165,43 +175,47 @@ export function AgencyDialog({ open, onOpenChange, onSave, comercializadoras, ag
                         {errors.address && <p className="text-xs text-destructive">{errors.address}</p>}
                     </div>
 
-                    {/* Email y Password solo al crear */}
+                    {/* Email solo al crear */}
                     {!agency && (
-                        <>
-                            <div className="grid gap-2">
-                                <Label>Email del Usuario</Label>
-                                <Input
-                                    type="email"
-                                    value={email}
-                                    onChange={e => {
-                                        setEmail(e.target.value)
-                                        if (errors.email) setErrors({ ...errors, email: '' })
-                                    }}
-                                    placeholder="agencia@ejemplo.com"
-                                    className={errors.email ? "border-destructive" : ""}
-                                />
-                                {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
-                                <p className="text-xs text-muted-foreground">
-                                    Se creará un usuario con este email para acceder al sistema
-                                </p>
-                            </div>
-
-                            <div className="grid gap-2">
-                                <Label>Contraseña</Label>
-                                <Input
-                                    type="password"
-                                    value={password}
-                                    onChange={e => {
-                                        setPassword(e.target.value)
-                                        if (errors.password) setErrors({ ...errors, password: '' })
-                                    }}
-                                    placeholder="Mínimo 6 caracteres"
-                                    className={errors.password ? "border-destructive" : ""}
-                                />
-                                {errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
-                            </div>
-                        </>
+                        <div className="grid gap-2">
+                            <Label>Email del Usuario</Label>
+                            <Input
+                                type="email"
+                                value={email}
+                                onChange={e => {
+                                    setEmail(e.target.value)
+                                    if (errors.email) setErrors({ ...errors, email: '' })
+                                }}
+                                placeholder="agencia@ejemplo.com"
+                                className={errors.email ? "border-destructive" : ""}
+                            />
+                            {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
+                            <p className="text-xs text-muted-foreground">
+                                Se creará un usuario con este email para acceder al sistema
+                            </p>
+                        </div>
                     )}
+
+                    {/* Contraseña: requerida al crear, opcional al editar */}
+                    <div className="grid gap-2">
+                        <Label>Contraseña {!agency && '*'}</Label>
+                        <Input
+                            type="password"
+                            value={password}
+                            onChange={e => {
+                                setPassword(e.target.value)
+                                if (errors.password) setErrors({ ...errors, password: '' })
+                            }}
+                            placeholder={agency ? "Dejar vacío para mantener la actual" : "Mínimo 6 caracteres"}
+                            className={errors.password ? "border-destructive" : ""}
+                        />
+                        {errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
+                        {agency && (
+                            <p className="text-xs text-muted-foreground">
+                                Solo se actualizará si ingresas una nueva contraseña
+                            </p>
+                        )}
+                    </div>
 
                     {!defaultParentId && !agency && (
                         <div className="grid gap-2">
