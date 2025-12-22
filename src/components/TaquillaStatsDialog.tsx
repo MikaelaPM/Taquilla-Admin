@@ -47,6 +47,8 @@ interface CashRegister {
   sales: number
   grossSale: number
   ticketCount: number
+  activeTickets: number
+  cancelledTickets: number
   shareOnSales: number
   shareOnSaleAmount: number
   totalPrizes: number
@@ -55,6 +57,7 @@ interface CashRegister {
 
 interface ReportMetrics {
   totalTickets: number
+  totalCancelledTickets: number
   totalSales: number
   totalPrizes: number
   totalCommission: number
@@ -108,12 +111,12 @@ export function TaquillaStatsDialog({ open, onOpenChange, taquilla }: Props) {
       setError(null)
 
       try {
+        // Obtener todas las cajas (abiertas y cerradas)
         const { data, error: queryError } = await supabase
           .from('cash_registers')
           .select('*')
           .eq('user_id', taquilla.id)
-          .eq('status', 'closed')
-          .order('closing_date', { ascending: false })
+          .order('opening_date', { ascending: false })
 
         if (queryError) throw queryError
 
@@ -126,30 +129,46 @@ export function TaquillaStatsDialog({ open, onOpenChange, taquilla }: Props) {
           sales: Number(register.sales || 0),
           grossSale: Number(register.gross_sale || 0),
           ticketCount: register.ticket_count || 0,
+          activeTickets: 0,
+          cancelledTickets: 0,
           shareOnSales: Number(register.share_on_sales || 0),
           shareOnSaleAmount: Number(register.share_on_sale_amount || 0),
           totalPrizes: 0,
           status: register.status as 'open' | 'closed'
         }))
 
-        // Calcular premios para cada caja
+        // Calcular premios y tickets para cada caja
         for (const register of mappedRegisters) {
           const { data: bets } = await supabase
             .from('bets')
-            .select('id')
+            .select('id, status, amount')
             .eq('cash_register', register.id)
 
           if (bets && bets.length > 0) {
-            const betIds = bets.map(b => b.id)
-            const { data: winningItems } = await supabase
-              .from('bets_item_lottery_clasic')
-              .select('potential_bet_amount')
-              .in('bets_id', betIds)
-              .in('status', ['winner', 'paid'])
+            // Contar tickets activos y anulados
+            register.activeTickets = bets.filter(b => b.status === 'active').length
+            register.cancelledTickets = bets.filter(b => b.status === 'cancelled').length
 
-            if (winningItems) {
-              register.totalPrizes = winningItems.reduce((sum, item) =>
-                sum + Number(item.potential_bet_amount || 0), 0)
+            // Para cajas abiertas, recalcular ventas desde bets activos
+            if (register.status === 'open') {
+              const activeBets = bets.filter(b => b.status === 'active')
+              register.grossSale = activeBets.reduce((sum, bet) => sum + Number(bet.amount || 0), 0)
+              register.ticketCount = activeBets.length
+            }
+
+            // Solo calcular premios de tickets activos
+            const activeBetIds = bets.filter(b => b.status === 'active').map(b => b.id)
+            if (activeBetIds.length > 0) {
+              const { data: winningItems } = await supabase
+                .from('bets_item_lottery_clasic')
+                .select('potential_bet_amount')
+                .in('bets_id', activeBetIds)
+                .in('status', ['winner', 'paid'])
+
+              if (winningItems) {
+                register.totalPrizes = winningItems.reduce((sum, item) =>
+                  sum + Number(item.potential_bet_amount || 0), 0)
+              }
             }
           }
         }
@@ -174,8 +193,9 @@ export function TaquillaStatsDialog({ open, onOpenChange, taquilla }: Props) {
       const start = new Date(startDate).getTime()
       const end = new Date(endDate + 'T23:59:59').getTime()
       filtered = registers.filter(r => {
-        const closeDate = r.closingDate || 0
-        return closeDate >= start && closeDate <= end
+        // Para cajas abiertas usar openingDate, para cerradas usar closingDate
+        const relevantDate = r.status === 'open' ? r.openingDate : (r.closingDate || r.openingDate)
+        return relevantDate >= start && relevantDate <= end
       })
     } else if (periodFilter !== 'all') {
       const now = new Date()
@@ -195,7 +215,11 @@ export function TaquillaStatsDialog({ open, onOpenChange, taquilla }: Props) {
           startDateTs = 0
       }
 
-      filtered = registers.filter(r => (r.closingDate || 0) >= startDateTs)
+      // Para cajas abiertas usar openingDate, para cerradas usar closingDate
+      filtered = registers.filter(r => {
+        const relevantDate = r.status === 'open' ? r.openingDate : (r.closingDate || r.openingDate)
+        return relevantDate >= startDateTs
+      })
     }
 
     return filtered
@@ -212,7 +236,8 @@ export function TaquillaStatsDialog({ open, onOpenChange, taquilla }: Props) {
       const net = sales - prizes - commission
 
       return {
-        totalTickets: acc.totalTickets + (register.ticketCount || 0),
+        totalTickets: acc.totalTickets + (register.activeTickets || 0),
+        totalCancelledTickets: acc.totalCancelledTickets + (register.cancelledTickets || 0),
         totalSales: acc.totalSales + sales,
         totalPrizes: acc.totalPrizes + prizes,
         totalCommission: acc.totalCommission + commission,
@@ -221,6 +246,7 @@ export function TaquillaStatsDialog({ open, onOpenChange, taquilla }: Props) {
       }
     }, {
       totalTickets: 0,
+      totalCancelledTickets: 0,
       totalSales: 0,
       totalPrizes: 0,
       totalCommission: 0,
@@ -468,13 +494,20 @@ export function TaquillaStatsDialog({ open, onOpenChange, taquilla }: Props) {
           ) : (
             <Card>
               <CardContent className="p-4">
-                <div className="grid gap-4 grid-cols-2 sm:grid-cols-4">
+                <div className="grid gap-4 grid-cols-2 sm:grid-cols-5">
                   <div className="space-y-1">
                     <div className="flex items-center gap-1 text-muted-foreground">
                       <Ticket size={14} />
-                      <span className="text-xs">Tickets</span>
+                      <span className="text-xs">Tickets Activos</span>
                     </div>
                     <p className="text-2xl font-bold">{metrics.totalTickets}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1 text-muted-foreground">
+                      <Ticket size={14} />
+                      <span className="text-xs">Anulados</span>
+                    </div>
+                    <p className="text-2xl font-bold text-orange-500">{metrics.totalCancelledTickets}</p>
                   </div>
                   <div className="space-y-1">
                     <div className="flex items-center gap-1 text-muted-foreground">
@@ -514,7 +547,7 @@ export function TaquillaStatsDialog({ open, onOpenChange, taquilla }: Props) {
                   <div className="space-y-1">
                     <div className="flex items-center gap-1 text-muted-foreground">
                       <Wallet size={14} />
-                      <span className="text-xs">Cajas Cerradas</span>
+                      <span className="text-xs">Cajas</span>
                     </div>
                     <p className="text-xl font-bold">{metrics.totalRegisters}</p>
                   </div>
@@ -545,8 +578,10 @@ export function TaquillaStatsDialog({ open, onOpenChange, taquilla }: Props) {
                         <Table>
                           <TableHeader>
                             <TableRow>
-                              <TableHead className="text-xs">Fecha Cierre</TableHead>
-                              <TableHead className="text-xs text-center">Tickets</TableHead>
+                              <TableHead className="text-xs">Fecha</TableHead>
+                              <TableHead className="text-xs">Estado</TableHead>
+                              <TableHead className="text-xs text-center">Activos</TableHead>
+                              <TableHead className="text-xs text-center">Anulados</TableHead>
                               <TableHead className="text-xs text-right">Ventas</TableHead>
                               <TableHead className="text-xs text-right">Premios</TableHead>
                               <TableHead className="text-xs text-right">% Taq</TableHead>
@@ -558,14 +593,30 @@ export function TaquillaStatsDialog({ open, onOpenChange, taquilla }: Props) {
                             {paginatedRegisters.map(register => {
                               const commission = register.shareOnSaleAmount || (register.grossSale * (taquilla.shareOnSales || 0) / 100)
                               const total = register.grossSale - register.totalPrizes - commission
+                              const isOpen = register.status === 'open'
+                              const displayDate = isOpen ? register.openingDate : register.closingDate
                               return (
-                                <TableRow key={register.id}>
+                                <TableRow key={register.id} className={isOpen ? 'bg-green-50 dark:bg-green-950/20' : ''}>
                                   <TableCell className="text-xs">
-                                    {register.closingDate
-                                      ? format(new Date(register.closingDate), "dd/MM/yy HH:mm", { locale: es })
+                                    {displayDate
+                                      ? format(new Date(displayDate), "dd/MM/yy HH:mm", { locale: es })
                                       : '-'}
                                   </TableCell>
-                                  <TableCell className="text-xs text-center">{register.ticketCount}</TableCell>
+                                  <TableCell>
+                                    {isOpen ? (
+                                      <Badge className="bg-green-500 text-xs">Abierta</Badge>
+                                    ) : (
+                                      <Badge variant="secondary" className="text-xs">Cerrada</Badge>
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="text-xs text-center">{register.activeTickets}</TableCell>
+                                  <TableCell className="text-xs text-center">
+                                    {register.cancelledTickets > 0 ? (
+                                      <span className="text-orange-500 font-medium">{register.cancelledTickets}</span>
+                                    ) : (
+                                      <span className="text-muted-foreground">0</span>
+                                    )}
+                                  </TableCell>
                                   <TableCell className="text-xs text-right">{formatCurrency(register.grossSale)}</TableCell>
                                   <TableCell className="text-xs text-right">{formatCurrency(register.totalPrizes)}</TableCell>
                                   <TableCell className="text-xs text-right">
@@ -645,9 +696,12 @@ export function TaquillaStatsDialog({ open, onOpenChange, taquilla }: Props) {
             <DialogDescription>
               {selectedRegister && (
                 <>
-                  Caja del {selectedRegister.closingDate
-                    ? format(new Date(selectedRegister.closingDate), "dd/MM/yyyy HH:mm", { locale: es })
-                    : '-'}
+                  Caja {selectedRegister.status === 'open' ? 'abierta' : 'cerrada'} el{' '}
+                  {selectedRegister.status === 'open'
+                    ? format(new Date(selectedRegister.openingDate), "dd/MM/yyyy HH:mm", { locale: es })
+                    : selectedRegister.closingDate
+                      ? format(new Date(selectedRegister.closingDate), "dd/MM/yyyy HH:mm", { locale: es })
+                      : '-'}
                 </>
               )}
             </DialogDescription>

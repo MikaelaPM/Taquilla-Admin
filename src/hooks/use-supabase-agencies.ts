@@ -80,8 +80,27 @@ export function useSupabaseAgencies() {
         }
     }, [queryClient])
 
-    const updateAgency = useCallback(async (id: string, updates: Partial<Agency>) => {
+    const updateAgency = useCallback(async (id: string, updates: Partial<Agency> & { password?: string }) => {
         try {
+            // Si hay password, usar la mutation que maneja cambios de contraseña
+            if (updates.password) {
+                await updateUserMutation.mutateAsync({
+                    userId: id,
+                    userData: {
+                        name: updates.name,
+                        address: updates.address,
+                        parentId: updates.parentId,
+                        shareOnSales: updates.shareOnSales,
+                        shareOnProfits: updates.shareOnProfits,
+                        isActive: updates.isActive,
+                        password: updates.password
+                    }
+                })
+                toast.success('Agencia actualizada exitosamente')
+                return true
+            }
+
+            // Sin password, actualizar directamente
             const supabaseUpdates: any = {}
             if (updates.name !== undefined) supabaseUpdates.name = updates.name
             if (updates.address !== undefined) supabaseUpdates.address = updates.address
@@ -109,7 +128,7 @@ export function useSupabaseAgencies() {
             toast.error('Error al actualizar agencia')
             return false
         }
-    }, [queryClient])
+    }, [queryClient, updateUserMutation])
 
     const deleteAgency = useCallback(async (id: string) => {
         try {

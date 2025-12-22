@@ -11,7 +11,7 @@ import { toast } from "sonner"
 interface ComercializadoraDialogProps {
     open: boolean
     onOpenChange: (open: boolean) => void
-    onSave: (comercializadora: Omit<Comercializadora, 'id' | 'createdAt'> & { parentId?: string }) => Promise<boolean>
+    onSave: (comercializadora: Omit<Comercializadora, 'id' | 'createdAt'> & { parentId?: string; password?: string }) => Promise<boolean>
     comercializadora?: Comercializadora & { parentId?: string }
     currentUserId?: string
     createUser?: (userData: Omit<User, 'id' | 'createdAt'>) => Promise<boolean>
@@ -81,8 +81,12 @@ export function ComercializadoraDialog({
             return
         }
 
-        // Validar contraseña solo al crear
+        // Validar contraseña: requerida al crear, opcional al editar (pero si se proporciona debe tener mínimo 6 caracteres)
         if (!comercializadora && (!password || password.length < 6)) {
+            toast.error('La contraseña debe tener al menos 6 caracteres')
+            return
+        }
+        if (comercializadora && password && password.length < 6) {
             toast.error('La contraseña debe tener al menos 6 caracteres')
             return
         }
@@ -149,6 +153,8 @@ export function ComercializadoraDialog({
                 isActive,
                 createdBy: currentUserId,
                 parentId: parentIdToUse,
+                // Solo incluir password si se proporcionó un valor
+                ...(password.trim() ? { password: password.trim() } : {}),
             })
 
             if (success) {
@@ -206,21 +212,26 @@ export function ComercializadoraDialog({
                         )}
                     </div>
 
-                    {/* Contraseña solo al crear */}
-                    {!comercializadora && (
-                        <div className="space-y-2">
-                            <Label htmlFor="password">Contraseña *</Label>
-                            <Input
-                                id="password"
-                                type="password"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                placeholder="Mínimo 6 caracteres"
-                                required
-                                minLength={6}
-                            />
-                        </div>
-                    )}
+                    {/* Contraseña: requerida al crear, opcional al editar */}
+                    <div className="space-y-2">
+                        <Label htmlFor="password">
+                            Contraseña {!comercializadora && '*'}
+                        </Label>
+                        <Input
+                            id="password"
+                            type="password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            placeholder={comercializadora ? "Dejar vacío para mantener la actual" : "Mínimo 6 caracteres"}
+                            required={!comercializadora}
+                            minLength={6}
+                        />
+                        {comercializadora && (
+                            <p className="text-xs text-muted-foreground">
+                                Solo se actualizará si ingresas una nueva contraseña
+                            </p>
+                        )}
+                    </div>
 
                     {/* Selector de usuario padre - solo para superadmin */}
                     {isSuperAdmin && adminUsers.length > 0 && (

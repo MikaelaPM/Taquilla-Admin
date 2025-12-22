@@ -1,12 +1,26 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
-import { startOfWeek, endOfDay } from 'date-fns'
+import { startOfWeek, startOfDay, endOfDay, startOfMonth } from 'date-fns'
 
 export interface TaquillaStats {
   taquillaId: string
   taquillaName: string
+  // Datos del día
+  todaySales: number
+  todayPrizes: number
+  todaySalesCommission: number
+  todayBalance: number
+  // Datos de la semana
   weekSales: number
   weekPrizes: number
+  weekSalesCommission: number
+  weekBalance: number
+  // Datos del mes
+  monthSales: number
+  monthPrizes: number
+  monthSalesCommission: number
+  monthBalance: number
+  // Legacy
   salesCommission: number
   shareOnSales: number
   balance: number // weekSales - weekPrizes - salesCommission
@@ -49,21 +63,24 @@ export function useTaquillaStats(options: UseTaquillaStatsOptions) {
       setError(null)
 
       const now = new Date()
+      const todayStart = startOfDay(now).toISOString()
       const weekStart = startOfWeek(now, { weekStartsOn: 1 }).toISOString()
+      const monthStart = startOfMonth(now).toISOString()
       const todayEnd = endOfDay(now).toISOString()
 
       const taquillaIds = taquillas.map(t => t.id)
 
       // ============================================
       // 1. FETCH SALES from bets table
-      // Sum bets.amount where user_id is in taquillas
+      // Sum bets.amount where user_id is in taquillas (excluir anulados)
       // ============================================
       const { data: salesData, error: salesError } = await supabase
         .from('bets')
-        .select('user_id, amount')
+        .select('user_id, amount, created_at')
         .in('user_id', taquillaIds)
-        .gte('created_at', weekStart)
+        .gte('created_at', monthStart)
         .lte('created_at', todayEnd)
+        .neq('status', 'cancelled')
 
       if (salesError) {
         console.error('Error fetching sales:', salesError)
@@ -71,13 +88,27 @@ export function useTaquillaStats(options: UseTaquillaStatsOptions) {
         return
       }
 
-      // Sum sales by taquilla
-      const salesByTaquilla = new Map<string, number>()
+      // Sum sales by taquilla (mes, semana y día)
+      const monthSalesByTaquilla = new Map<string, number>()
+      const weekSalesByTaquilla = new Map<string, number>()
+      const todaySalesByTaquilla = new Map<string, number>()
       ;(salesData || []).forEach(bet => {
         const odile = bet.user_id as string
         if (odile) {
-          const current = salesByTaquilla.get(odile) || 0
-          salesByTaquilla.set(odile, current + (Number(bet.amount) || 0))
+          const amount = Number(bet.amount) || 0
+          // Ventas del mes
+          const currentMonth = monthSalesByTaquilla.get(odile) || 0
+          monthSalesByTaquilla.set(odile, currentMonth + amount)
+          // Ventas de la semana
+          if (bet.created_at >= weekStart) {
+            const currentWeek = weekSalesByTaquilla.get(odile) || 0
+            weekSalesByTaquilla.set(odile, currentWeek + amount)
+          }
+          // Ventas del día
+          if (bet.created_at >= todayStart) {
+            const currentToday = todaySalesByTaquilla.get(odile) || 0
+            todaySalesByTaquilla.set(odile, currentToday + amount)
+          }
         }
       })
 
@@ -88,10 +119,10 @@ export function useTaquillaStats(options: UseTaquillaStatsOptions) {
       // ============================================
       const { data: prizesData, error: prizesError } = await supabase
         .from('bets_item_lottery_clasic')
-        .select('user_id, potential_bet_amount, status')
+        .select('user_id, potential_bet_amount, status, created_at')
         .in('user_id', taquillaIds)
         .in('status', ['winner', 'paid'])
-        .gte('created_at', weekStart)
+        .gte('created_at', monthStart)
         .lte('created_at', todayEnd)
 
       if (prizesError) {
@@ -100,13 +131,27 @@ export function useTaquillaStats(options: UseTaquillaStatsOptions) {
         return
       }
 
-      // Sum prizes by taquilla
-      const prizesByTaquilla = new Map<string, number>()
+      // Sum prizes by taquilla (mes, semana y día)
+      const monthPrizesByTaquilla = new Map<string, number>()
+      const weekPrizesByTaquilla = new Map<string, number>()
+      const todayPrizesByTaquilla = new Map<string, number>()
       ;(prizesData || []).forEach(item => {
         const odile = item.user_id as string
         if (odile) {
-          const current = prizesByTaquilla.get(odile) || 0
-          prizesByTaquilla.set(odile, current + (Number(item.potential_bet_amount) || 0))
+          const amount = Number(item.potential_bet_amount) || 0
+          // Premios del mes
+          const currentMonth = monthPrizesByTaquilla.get(odile) || 0
+          monthPrizesByTaquilla.set(odile, currentMonth + amount)
+          // Premios de la semana
+          if (item.created_at >= weekStart) {
+            const currentWeek = weekPrizesByTaquilla.get(odile) || 0
+            weekPrizesByTaquilla.set(odile, currentWeek + amount)
+          }
+          // Premios del día
+          if (item.created_at >= todayStart) {
+            const currentToday = todayPrizesByTaquilla.get(odile) || 0
+            todayPrizesByTaquilla.set(odile, currentToday + amount)
+          }
         }
       })
 
@@ -114,21 +159,45 @@ export function useTaquillaStats(options: UseTaquillaStatsOptions) {
       // 3. Calculate stats per taquilla
       // ============================================
       const computedStats: TaquillaStats[] = taquillas.map(taquilla => {
-        const weekSales = salesByTaquilla.get(taquilla.id) || 0
-        const weekPrizes = prizesByTaquilla.get(taquilla.id) || 0
-
-        // Calculate commission (percentage of sales)
         const shareOnSales = taquilla.shareOnSales || 0
-        const salesCommission = weekSales * (shareOnSales / 100)
 
-        // Calculate balance: sales - prizes - commission
-        const balance = weekSales - weekPrizes - salesCommission
+        // ---- Datos del DÍA ----
+        const todaySales = todaySalesByTaquilla.get(taquilla.id) || 0
+        const todayPrizes = todayPrizesByTaquilla.get(taquilla.id) || 0
+        const todaySalesCommission = todaySales * (shareOnSales / 100)
+        const todayBalance = todaySales - todayPrizes - todaySalesCommission
+
+        // ---- Datos de la SEMANA ----
+        const weekSales = weekSalesByTaquilla.get(taquilla.id) || 0
+        const weekPrizes = weekPrizesByTaquilla.get(taquilla.id) || 0
+        const weekSalesCommission = weekSales * (shareOnSales / 100)
+        const weekBalance = weekSales - weekPrizes - weekSalesCommission
+
+        // ---- Datos del MES ----
+        const monthSales = monthSalesByTaquilla.get(taquilla.id) || 0
+        const monthPrizes = monthPrizesByTaquilla.get(taquilla.id) || 0
+        const monthSalesCommission = monthSales * (shareOnSales / 100)
+        const monthBalance = monthSales - monthPrizes - monthSalesCommission
+
+        // Legacy
+        const salesCommission = weekSalesCommission
+        const balance = weekBalance
 
         return {
           taquillaId: taquilla.id,
           taquillaName: taquilla.fullName,
+          todaySales,
+          todayPrizes,
+          todaySalesCommission,
+          todayBalance,
           weekSales,
           weekPrizes,
+          weekSalesCommission,
+          weekBalance,
+          monthSales,
+          monthPrizes,
+          monthSalesCommission,
+          monthBalance,
           salesCommission,
           shareOnSales,
           balance

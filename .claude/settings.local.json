@@ -9,7 +9,8 @@
       "Bash(findstr:*)",
       "Bash(cat:*)",
       "Bash(node scripts/diagnose-winners.mjs:*)",
-      "Bash(node -e:*)"
+      "Bash(node -e:*)",
+      "Bash(npm run build:ts:*)"
     ],
     "deny": [],
     "ask": []

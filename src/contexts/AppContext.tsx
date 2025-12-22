@@ -404,11 +404,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       name: updates.fullName,
       address: updates.address,
       phone: updates.telefono,
+      email: updates.email,
       parentId: updates.agencyId,
       isActive: updates.isApproved,
       shareOnSales: updates.shareOnSales,
       shareOnProfits: updates.shareOnProfits,
-      salesLimit: updates.salesLimit
+      salesLimit: updates.salesLimit,
+      // Solo incluir password si se proporcionó
+      ...(updates.password ? { password: updates.password } : {})
     })
   }
 
@@ -440,7 +443,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       shareOnSales: updates.shareOnSales,
       shareOnProfits: updates.shareOnProfits,
       isActive: updates.isActive,
-      parentId: updates.parentId
+      parentId: updates.parentId,
+      // Solo incluir password si se proporcionó
+      ...(updates.password ? { password: updates.password } : {})
     })
   }
 
