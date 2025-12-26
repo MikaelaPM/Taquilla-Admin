@@ -212,8 +212,8 @@ export function useUpdateUserMutation() {
           )
 
           if (!response.ok) {
-            const result = await response.json()
-            throw new Error(result.error || 'Error al actualizar contraseña')
+            const result = await response.json().catch(() => ({ error: `HTTP ${response.status}` }))
+            throw new Error(result.error || `Error al actualizar contraseña (${response.status})`)
           }
         }
       }

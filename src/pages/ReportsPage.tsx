@@ -152,49 +152,59 @@ export function ReportsPage() {
         }
       })
     } else if (isComercializadora && agencyStats && agencyStats.length > 0) {
-      // Comercializadora: sumar de todas sus agencias
+      // Comercializadora: sumar ventas y premios de todas sus agencias
+      // La comisión se calcula con el % de la comercializadora sobre el total de ventas
+      // Buscar la comercializadora actual por userId
+      const currentComercializadora = comercializadoras?.find(c => c.userId === currentUser?.id)
+      const comercializadoraShareOnSales = currentComercializadora?.shareOnSales || 0
+
       agencyStats.forEach(stat => {
         if (periodFilter === 'today') {
           totalSales += stat.todaySales
           totalPrizes += stat.todayPrizes
-          totalCommissions += stat.todaySalesCommission
           totalBalance += stat.todayBalance
         } else if (periodFilter === 'week') {
           totalSales += stat.weekSales
           totalPrizes += stat.weekPrizes
-          totalCommissions += stat.weekSalesCommission
           totalBalance += stat.weekBalance
         } else {
           totalSales += stat.monthSales
           totalPrizes += stat.monthPrizes
-          totalCommissions += stat.monthSalesCommission
           totalBalance += stat.monthBalance
         }
       })
+
+      // Calcular comisión de la comercializadora basada en su porcentaje sobre el total de ventas
+      totalCommissions = totalSales * (comercializadoraShareOnSales / 100)
     } else if (isAgencia && taquillaStats && taquillaStats.length > 0) {
-      // Agencia: sumar de todas sus taquillas
+      // Agencia: sumar ventas y premios de todas sus taquillas
+      // La comisión se calcula con el % de la agencia sobre el total de ventas
+      // Buscar la agencia actual por id (el usuario ES la agencia)
+      const currentAgency = agencies?.find(a => a.id === currentUser?.id)
+      const agencyShareOnSales = currentAgency?.shareOnSales || 0
+
       taquillaStats.forEach(stat => {
         if (periodFilter === 'today') {
           totalSales += stat.todaySales
           totalPrizes += stat.todayPrizes
-          totalCommissions += stat.todaySalesCommission
           totalBalance += stat.todayBalance
         } else if (periodFilter === 'week') {
           totalSales += stat.weekSales
           totalPrizes += stat.weekPrizes
-          totalCommissions += stat.weekSalesCommission
           totalBalance += stat.weekBalance
         } else {
           totalSales += stat.monthSales
           totalPrizes += stat.monthPrizes
-          totalCommissions += stat.monthSalesCommission
           totalBalance += stat.monthBalance
         }
       })
+
+      // Calcular comisión de la agencia basada en su porcentaje sobre el total de ventas
+      totalCommissions = totalSales * (agencyShareOnSales / 100)
     }
 
     return { totalSales, totalPrizes, totalCommissions, totalBalance }
-  }, [isAdmin, isComercializadora, isAgencia, comercializadoraStats, agencyStats, taquillaStats, periodFilter])
+  }, [isAdmin, isComercializadora, isAgencia, comercializadoraStats, agencyStats, taquillaStats, periodFilter, currentUser, comercializadoras, agencies])
 
   // Estadísticas principales - usando datos filtrados por taquillas visibles
   const stats = useMemo(() => {
