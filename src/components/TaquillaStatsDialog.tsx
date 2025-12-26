@@ -24,7 +24,6 @@ import {
   Spinner,
   CaretLeft,
   CaretRight,
-  Wallet,
   Receipt,
   CaretDown,
   CaretUp,
@@ -102,7 +101,7 @@ export function TaquillaStatsDialog({ open, onOpenChange, taquilla }: Props) {
   const [ticketItems, setTicketItems] = useState<TicketItem[]>([])
   const [loadingItems, setLoadingItems] = useState(false)
 
-  // Cargar registros de caja
+  // Cargar registros de caja (RLS permite acceso jerárquico)
   useEffect(() => {
     const fetchRegisters = async () => {
       if (!open || !taquilla || !isSupabaseConfigured()) return
@@ -111,7 +110,6 @@ export function TaquillaStatsDialog({ open, onOpenChange, taquilla }: Props) {
       setError(null)
 
       try {
-        // Obtener todas las cajas (abiertas y cerradas)
         const { data, error: queryError } = await supabase
           .from('cash_registers')
           .select('*')
@@ -145,18 +143,15 @@ export function TaquillaStatsDialog({ open, onOpenChange, taquilla }: Props) {
             .eq('cash_register', register.id)
 
           if (bets && bets.length > 0) {
-            // Contar tickets activos y anulados
             register.activeTickets = bets.filter(b => b.status === 'active').length
             register.cancelledTickets = bets.filter(b => b.status === 'cancelled').length
 
-            // Para cajas abiertas, recalcular ventas desde bets activos
             if (register.status === 'open') {
               const activeBets = bets.filter(b => b.status === 'active')
               register.grossSale = activeBets.reduce((sum, bet) => sum + Number(bet.amount || 0), 0)
               register.ticketCount = activeBets.length
             }
 
-            // Solo calcular premios de tickets activos
             const activeBetIds = bets.filter(b => b.status === 'active').map(b => b.id)
             if (activeBetIds.length > 0) {
               const { data: winningItems } = await supabase
@@ -494,7 +489,8 @@ export function TaquillaStatsDialog({ open, onOpenChange, taquilla }: Props) {
           ) : (
             <Card>
               <CardContent className="p-4">
-                <div className="grid gap-4 grid-cols-2 sm:grid-cols-5">
+                {/* Fila 1: Tickets Activos, Anulados, Ventas */}
+                <div className="grid gap-4 grid-cols-3">
                   <div className="space-y-1">
                     <div className="flex items-center gap-1 text-muted-foreground">
                       <Ticket size={14} />
@@ -516,12 +512,25 @@ export function TaquillaStatsDialog({ open, onOpenChange, taquilla }: Props) {
                     </div>
                     <p className="text-2xl font-bold text-blue-600">{formatCurrency(metrics.totalSales)}</p>
                   </div>
+                </div>
+
+                <Separator className="my-4" />
+
+                {/* Fila 2: Premios, Comisión, Neto */}
+                <div className="grid gap-4 grid-cols-3">
                   <div className="space-y-1">
                     <div className="flex items-center gap-1 text-muted-foreground">
                       <Trophy size={14} />
                       <span className="text-xs">Premios</span>
                     </div>
                     <p className="text-2xl font-bold text-red-600">{formatCurrency(metrics.totalPrizes)}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1 text-muted-foreground">
+                      <Percent size={14} />
+                      <span className="text-xs">Comisión ({taquilla.shareOnSales || 0}%)</span>
+                    </div>
+                    <p className="text-2xl font-bold">{formatCurrency(metrics.totalCommission)}</p>
                   </div>
                   <div className="space-y-1">
                     <div className="flex items-center gap-1 text-muted-foreground">
@@ -534,24 +543,6 @@ export function TaquillaStatsDialog({ open, onOpenChange, taquilla }: Props) {
                   </div>
                 </div>
 
-                <Separator className="my-4" />
-
-                <div className="grid gap-4 grid-cols-2">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-1 text-muted-foreground">
-                      <Percent size={14} />
-                      <span className="text-xs">Comisión Taquilla ({taquilla.shareOnSales || 0}%)</span>
-                    </div>
-                    <p className="text-xl font-bold">{formatCurrency(metrics.totalCommission)}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-1 text-muted-foreground">
-                      <Wallet size={14} />
-                      <span className="text-xs">Cajas</span>
-                    </div>
-                    <p className="text-xl font-bold">{metrics.totalRegisters}</p>
-                  </div>
-                </div>
               </CardContent>
             </Card>
           )}
@@ -569,7 +560,11 @@ export function TaquillaStatsDialog({ open, onOpenChange, taquilla }: Props) {
                 {filteredRegisters.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-8 text-center">
                     <ChartBar size={48} className="text-muted-foreground mb-2" />
-                    <p className="text-muted-foreground">No hay cajas en el período seleccionado</p>
+                    <p className="text-muted-foreground">
+                      {registers.length === 0
+                        ? 'No se encontraron cajas registradoras para esta taquilla'
+                        : 'No hay cajas en el período seleccionado'}
+                    </p>
                   </div>
                 ) : (
                   <>
