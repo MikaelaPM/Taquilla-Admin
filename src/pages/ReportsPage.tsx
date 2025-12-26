@@ -179,8 +179,8 @@ export function ReportsPage() {
     } else if (isAgencia && taquillaStats && taquillaStats.length > 0) {
       // Agencia: sumar ventas y premios de todas sus taquillas
       // La comisión se calcula con el % de la agencia sobre el total de ventas
-      // Buscar la agencia actual por userId
-      const currentAgency = agencies?.find(a => a.userId === currentUser?.id)
+      // Buscar la agencia actual por id (el usuario ES la agencia)
+      const currentAgency = agencies?.find(a => a.id === currentUser?.id)
       const agencyShareOnSales = currentAgency?.shareOnSales || 0
 
       taquillaStats.forEach(stat => {
