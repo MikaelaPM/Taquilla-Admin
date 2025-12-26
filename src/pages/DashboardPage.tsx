@@ -3,12 +3,13 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useApp } from '@/contexts/AppContext'
 import { useSalesStats } from '@/hooks/use-sales-stats'
 import { useComercializadoraStats } from '@/hooks/use-comercializadora-stats'
 import { useAgencyStats } from '@/hooks/use-agency-stats'
 import { useTaquillaStats } from '@/hooks/use-taquilla-stats'
+import { useHierarchicalStats } from '@/hooks/use-hierarchical-stats'
+import { HierarchicalStatsTable } from '@/components/HierarchicalStatsTable'
 import { formatCurrency } from '@/lib/pot-utils'
 import { format, parseISO, startOfDay, endOfDay, startOfWeek, isWithinInterval } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -24,10 +25,10 @@ import {
   CaretDown,
   Clock,
   CheckCircle,
-  User,
   CalendarBlank,
   Buildings,
-  FunnelSimple
+  FunnelSimple,
+  TreeStructure
 } from '@phosphor-icons/react'
 
 export function DashboardPage() {
@@ -44,7 +45,8 @@ export function DashboardPage() {
     currentUser,
     comercializadoras,
     agencies,
-    visibleAgencies
+    visibleAgencies,
+    users: allUsers
   } = useApp()
 
   // Fechas de referencia
@@ -99,6 +101,19 @@ export function DashboardPage() {
   // Stats de taquillas para la tabla (para agencias)
   const { stats: taquillaStats, loading: taquillaStatsLoading, refresh: refreshTaquillaStats } = useTaquillaStats({
     taquillas: visibleTaquillas || [],
+    dateFrom: appliedDateRange.from,
+    dateTo: appliedDateRange.to
+  })
+
+  // Stats jerárquicos (para la tabla expandible)
+  const {
+    rootType: hierarchyRootType,
+    rootEntities: hierarchyRootEntities,
+    loading: hierarchyLoading,
+    refresh: refreshHierarchy
+  } = useHierarchicalStats({
+    currentUser,
+    allUsers,
     dateFrom: appliedDateRange.from,
     dateTo: appliedDateRange.to
   })
@@ -346,6 +361,7 @@ export function DashboardPage() {
     loadDailyResults()
     loadWinners()
     refreshSales()
+    refreshHierarchy()
     if (isAgencia) {
       refreshTaquillaStats()
     } else if (isComercializadora) {
@@ -403,7 +419,7 @@ export function DashboardPage() {
     setIsApplyingFilter(false)
   }, [pendingDateRange])
 
-  const isLoading = dailyResultsLoading || winnersLoading || salesLoading || comercializadoraStatsLoading || agencyStatsLoading || taquillaStatsLoading || isApplyingFilter
+  const isLoading = dailyResultsLoading || winnersLoading || salesLoading || comercializadoraStatsLoading || agencyStatsLoading || taquillaStatsLoading || hierarchyLoading || isApplyingFilter
 
   // Validar si las fechas pendientes son válidas
   const isDateRangeValid = pendingDateRange.to >= pendingDateRange.from
@@ -721,301 +737,34 @@ export function DashboardPage() {
         </Card>
       </div>
 
-      {/* Desglose por Comercializadora (solo para admin) */}
-      {!isComercializadora && !isAgencia && comercializadoras && comercializadoras.length > 0 && (
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-4">
-              <Buildings className="h-5 w-5 text-primary" />
-              <h3 className="font-semibold">Desglose por Comercializadora</h3>
-              <Badge variant="outline" className="ml-auto text-xs bg-blue-50 text-blue-700 border-blue-200">
-                {getPeriodLabel()}
-              </Badge>
-            </div>
-            {comercializadoraStatsLoading ? (
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <ArrowsClockwise className="h-10 w-10 text-muted-foreground mb-2 animate-spin" />
-                <p className="text-sm text-muted-foreground">Cargando estadísticas...</p>
-              </div>
-            ) : comercializadoraStats.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <Buildings className="h-10 w-10 text-muted-foreground mb-2" />
-                <p className="text-sm text-muted-foreground">No hay comercializadoras con ventas</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Comercializadora</TableHead>
-                      <TableHead className="text-right">Ventas</TableHead>
-                      <TableHead className="text-right">Premios</TableHead>
-                      <TableHead className="text-right">Comisión (%)</TableHead>
-                      <TableHead className="text-right">Balance</TableHead>
-                      <TableHead className="text-right">Ganancia Com. (%)</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {comercializadoraStats.map((stat) => {
-                      const sales = periodType === 'today' ? stat.todaySales : periodType === 'week' ? stat.weekSales : stat.rangeSales
-                      const prizes = periodType === 'today' ? stat.todayPrizes : periodType === 'week' ? stat.weekPrizes : stat.rangePrizes
-                      const commission = periodType === 'today' ? stat.todaySalesCommission : periodType === 'week' ? stat.weekSalesCommission : stat.rangeSalesCommission
-                      const balance = periodType === 'today' ? stat.todayBalance : periodType === 'week' ? stat.weekBalance : stat.rangeBalance
-                      const profit = periodType === 'today' ? stat.todayProfit : periodType === 'week' ? stat.weekProfit : stat.rangeProfit
-                      return (
-                        <TableRow key={stat.comercializadoraId}>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center">
-                                <Buildings className="h-4 w-4 text-white" weight="fill" />
-                              </div>
-                              <span className="font-medium">{stat.comercializadoraName}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right font-semibold text-blue-600">
-                            {formatCurrency(sales)}
-                          </TableCell>
-                          <TableCell className="text-right font-semibold text-red-600">
-                            {formatCurrency(prizes)}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex flex-col items-end">
-                              <span className="font-medium text-amber-600">{formatCurrency(commission)}</span>
-                              <span className="text-xs text-muted-foreground">({stat.shareOnSales}%)</span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <span className={`font-bold ${balance >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                              {formatCurrency(balance)}
-                            </span>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex flex-col items-end">
-                              <span className="font-bold text-purple-600">{formatCurrency(profit)}</span>
-                              <span className="text-xs text-muted-foreground">({stat.shareOnProfits}%)</span>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      )
-                    })}
-                    {/* Fila de totales */}
-                    <TableRow className="bg-muted/50 font-bold">
-                      <TableCell>
-                        <span className="font-bold">TOTALES</span>
-                      </TableCell>
-                      <TableCell className="text-right text-blue-600">
-                        {formatCurrency(comercializadoraTotals.totalSales)}
-                      </TableCell>
-                      <TableCell className="text-right text-red-600">
-                        {formatCurrency(comercializadoraTotals.totalPrizes)}
-                      </TableCell>
-                      <TableCell className="text-right text-amber-600">
-                        {formatCurrency(comercializadoraTotals.totalCommissions)}
-                      </TableCell>
-                      <TableCell className={`text-right ${comercializadoraTotals.totalBalance >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                        {formatCurrency(comercializadoraTotals.totalBalance)}
-                      </TableCell>
-                      <TableCell className="text-right text-purple-600">
-                        {formatCurrency(comercializadoraTotals.totalProfit)}
-                      </TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Desglose por Agencia (para comercializadoras) */}
-      {isComercializadora && !isAgencia && visibleAgencies && visibleAgencies.length > 0 && (
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-4">
-              <Storefront className="h-5 w-5 text-primary" />
-              <h3 className="font-semibold">Desglose por Agencia</h3>
-              <Badge variant="outline" className="ml-auto text-xs bg-blue-50 text-blue-700 border-blue-200">
-                {getPeriodLabel()}
-              </Badge>
-            </div>
-            {agencyStatsLoading ? (
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <ArrowsClockwise className="h-10 w-10 text-muted-foreground mb-2 animate-spin" />
-                <p className="text-sm text-muted-foreground">Cargando estadísticas...</p>
-              </div>
-            ) : agencyStats.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <Storefront className="h-10 w-10 text-muted-foreground mb-2" />
-                <p className="text-sm text-muted-foreground">No hay agencias con ventas</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Agencia</TableHead>
-                      <TableHead className="text-right">Ventas</TableHead>
-                      <TableHead className="text-right">Premios</TableHead>
-                      <TableHead className="text-right">Comisión (%)</TableHead>
-                      <TableHead className="text-right">Balance</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {agencyStats.map((stat) => {
-                      const sales = periodType === 'today' ? stat.todaySales : periodType === 'week' ? stat.weekSales : stat.rangeSales
-                      const prizes = periodType === 'today' ? stat.todayPrizes : periodType === 'week' ? stat.weekPrizes : stat.rangePrizes
-                      const commission = periodType === 'today' ? stat.todaySalesCommission : periodType === 'week' ? stat.weekSalesCommission : stat.rangeSalesCommission
-                      const balance = periodType === 'today' ? stat.todayBalance : periodType === 'week' ? stat.weekBalance : stat.rangeBalance
-                      return (
-                        <TableRow key={stat.agencyId}>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-cyan-500 to-cyan-600 flex items-center justify-center">
-                                <Storefront className="h-4 w-4 text-white" weight="fill" />
-                              </div>
-                              <span className="font-medium">{stat.agencyName}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right font-semibold text-blue-600">
-                            {formatCurrency(sales)}
-                          </TableCell>
-                          <TableCell className="text-right font-semibold text-red-600">
-                            {formatCurrency(prizes)}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex flex-col items-end">
-                              <span className="font-medium text-amber-600">{formatCurrency(commission)}</span>
-                              <span className="text-xs text-muted-foreground">({stat.shareOnSales}%)</span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <span className={`font-bold ${balance >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                              {formatCurrency(balance)}
-                            </span>
-                          </TableCell>
-                        </TableRow>
-                      )
-                    })}
-                    {/* Fila de totales */}
-                    <TableRow className="bg-muted/50 font-bold">
-                      <TableCell>
-                        <span className="font-bold">TOTALES</span>
-                      </TableCell>
-                      <TableCell className="text-right text-blue-600">
-                        {formatCurrency(agencyTotals.totalSales)}
-                      </TableCell>
-                      <TableCell className="text-right text-red-600">
-                        {formatCurrency(agencyTotals.totalPrizes)}
-                      </TableCell>
-                      <TableCell className="text-right text-amber-600">
-                        {formatCurrency(agencyTotals.totalCommissions)}
-                      </TableCell>
-                      <TableCell className={`text-right ${agencyTotals.totalBalance >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                        {formatCurrency(agencyTotals.totalBalance)}
-                      </TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Desglose por Taquilla (para agencias) */}
-      {isAgencia && visibleTaquillas && visibleTaquillas.length > 0 && (
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-4">
-              <User className="h-5 w-5 text-primary" />
-              <h3 className="font-semibold">Desglose por Taquilla</h3>
-              <Badge variant="outline" className="ml-auto text-xs bg-blue-50 text-blue-700 border-blue-200">
-                {getPeriodLabel()}
-              </Badge>
-            </div>
-            {taquillaStatsLoading ? (
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <ArrowsClockwise className="h-10 w-10 text-muted-foreground mb-2 animate-spin" />
-                <p className="text-sm text-muted-foreground">Cargando estadísticas...</p>
-              </div>
-            ) : taquillaStats.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <User className="h-10 w-10 text-muted-foreground mb-2" />
-                <p className="text-sm text-muted-foreground">No hay taquillas con ventas</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Taquilla</TableHead>
-                      <TableHead className="text-right">Ventas</TableHead>
-                      <TableHead className="text-right">Premios</TableHead>
-                      <TableHead className="text-right">Comisión (%)</TableHead>
-                      <TableHead className="text-right">Balance</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {taquillaStats.map((stat) => {
-                      const sales = periodType === 'today' ? stat.todaySales : periodType === 'week' ? stat.weekSales : stat.rangeSales
-                      const prizes = periodType === 'today' ? stat.todayPrizes : periodType === 'week' ? stat.weekPrizes : stat.rangePrizes
-                      const commission = periodType === 'today' ? stat.todaySalesCommission : periodType === 'week' ? stat.weekSalesCommission : stat.rangeSalesCommission
-                      const balance = periodType === 'today' ? stat.todayBalance : periodType === 'week' ? stat.weekBalance : stat.rangeBalance
-                      return (
-                        <TableRow key={stat.taquillaId}>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-violet-500 to-violet-600 flex items-center justify-center">
-                                <User className="h-4 w-4 text-white" weight="fill" />
-                              </div>
-                              <span className="font-medium">{stat.taquillaName}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right font-semibold text-blue-600">
-                            {formatCurrency(sales)}
-                          </TableCell>
-                          <TableCell className="text-right font-semibold text-red-600">
-                            {formatCurrency(prizes)}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex flex-col items-end">
-                              <span className="font-medium text-amber-600">{formatCurrency(commission)}</span>
-                              <span className="text-xs text-muted-foreground">({stat.shareOnSales}%)</span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <span className={`font-bold ${balance >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                              {formatCurrency(balance)}
-                            </span>
-                          </TableCell>
-                        </TableRow>
-                      )
-                    })}
-                    {/* Fila de totales */}
-                    <TableRow className="bg-muted/50 font-bold">
-                      <TableCell>
-                        <span className="font-bold">TOTALES</span>
-                      </TableCell>
-                      <TableCell className="text-right text-blue-600">
-                        {formatCurrency(taquillaTotals.totalSales)}
-                      </TableCell>
-                      <TableCell className="text-right text-red-600">
-                        {formatCurrency(taquillaTotals.totalPrizes)}
-                      </TableCell>
-                      <TableCell className="text-right text-amber-600">
-                        {formatCurrency(taquillaTotals.totalCommissions)}
-                      </TableCell>
-                      <TableCell className={`text-right ${taquillaTotals.totalBalance >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                        {formatCurrency(taquillaTotals.totalBalance)}
-                      </TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+      {/* Desglose Jerárquico */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex items-center gap-2 mb-4">
+            <TreeStructure className="h-5 w-5 text-primary" />
+            <h3 className="font-semibold">
+              {hierarchyRootType === 'admin' && 'Desglose por Administrador'}
+              {hierarchyRootType === 'comercializadora' && 'Desglose por Comercializadora'}
+              {hierarchyRootType === 'agencia' && 'Desglose por Agencia'}
+              {hierarchyRootType === 'taquilla' && 'Desglose por Taquilla'}
+            </h3>
+            <Badge variant="outline" className="ml-auto text-xs bg-blue-50 text-blue-700 border-blue-200">
+              {getPeriodLabel()}
+            </Badge>
+          </div>
+          <p className="text-xs text-muted-foreground mb-4">
+            Haz clic en una fila para ver el desglose de sus hijos
+          </p>
+          <HierarchicalStatsTable
+            rootType={hierarchyRootType}
+            rootEntities={hierarchyRootEntities}
+            dateFrom={appliedDateRange.from}
+            dateTo={appliedDateRange.to}
+            allUsers={allUsers}
+            isLoading={hierarchyLoading}
+          />
+        </CardContent>
+      </Card>
 
       {/* Loterías activas */}
       {activeLotteries.length > 0 && (
