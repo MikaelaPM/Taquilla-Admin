@@ -257,11 +257,53 @@ export function useSupabaseAuth() {
 
   const logout = async () => {
     try {
-      await supabase.auth.signOut()
+      // Limpiar estado local primero
+      currentUserIdRef.current = ''
       setCurrentUserId('')
       setCurrentUser(null)
+
+      // Cerrar sesión en Supabase con scope global para limpiar todas las sesiones
+      await supabase.auth.signOut({ scope: 'global' })
+
+      // Limpiar manualmente todos los posibles tokens de Supabase en localStorage
+      // (hay dos archivos de configuración con diferentes storageKeys)
+      const keysToRemove = [
+        'sb-admin-lib-auth-token',
+        'sb-admin-config-auth-token',
+        // También limpiar datos de backup/cache
+        'apiKeys',
+        'apiKeys_lastSync',
+        'supabase_bets_backup_v2',
+        'lotteries',
+        'users',
+        'localUsers',
+        'porcentajes_backup',
+        'supabase_reports_v1',
+        'reports_lastSync',
+        'autoPlayTomorrow'
+      ]
+
+      keysToRemove.forEach(key => {
+        try {
+          localStorage.removeItem(key)
+        } catch (e) {
+          // Ignorar errores de localStorage
+        }
+      })
     } catch (error) {
-      // Logout error
+      console.error('Error during logout:', error)
+      // Aún así limpiar el estado local y localStorage
+      currentUserIdRef.current = ''
+      setCurrentUserId('')
+      setCurrentUser(null)
+
+      // Intentar limpiar localStorage aunque haya error
+      try {
+        localStorage.removeItem('sb-admin-lib-auth-token')
+        localStorage.removeItem('sb-admin-config-auth-token')
+      } catch (e) {
+        // Ignorar
+      }
     }
   }
 

@@ -1,5 +1,5 @@
 import { Navigate, useLocation } from 'react-router-dom'
-import { useSupabaseAuth } from '@/hooks/use-supabase-auth'
+import { useApp } from '@/contexts/AppContext'
 
 interface ProtectedRouteProps {
   children: React.ReactNode
@@ -7,7 +7,7 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children, requiredPermission }: ProtectedRouteProps) {
-  const { currentUser, currentUserId, isLoading, hasPermission } = useSupabaseAuth()
+  const { currentUser, currentUserId, isLoading, canViewModule } = useApp()
   const location = useLocation()
 
   // Mostrar loading mientras se verifica la autenticación
@@ -25,33 +25,6 @@ export function ProtectedRoute({ children, requiredPermission }: ProtectedRouteP
   // Si no hay usuario autenticado, redirigir a login
   if (!currentUserId || !currentUser) {
     return <Navigate to="/login" state={{ from: location }} replace />
-  }
-
-  // Helper para verificar si el usuario puede ver un módulo
-  const canViewModule = (module: string): boolean => {
-    if (!currentUser) return false
-
-    // Para Admins: usar el sistema de permisos por roles
-    if (currentUser.userType === 'admin' || !currentUser.userType) {
-      return hasPermission(module)
-    }
-
-    // Comercializadora tiene acceso fijo a: dashboard, reports y comercializadoras (sus agencias/taquillas)
-    if (currentUser.userType === 'comercializadora') {
-      return ['dashboard', 'reports', 'comercializadoras'].includes(module)
-    }
-
-    // Agencia tiene acceso fijo a: dashboard, reports y comercializadoras (sus taquillas)
-    if (currentUser.userType === 'agencia') {
-      return ['dashboard', 'reports', 'comercializadoras'].includes(module)
-    }
-
-    // Taquilla tiene acceso básico
-    if (currentUser.userType === 'taquilla') {
-      return ['dashboard'].includes(module)
-    }
-
-    return false
   }
 
   // Si se requiere un permiso específico, verificarlo

@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Toaster } from '@/components/ui/sonner'
 import { useApp } from '@/contexts/AppContext'
+import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -56,6 +57,7 @@ const getNavItems = (currentUser: any) => {
 
 export function MainLayout() {
   const { currentUser, logout, canViewModule, updateUser } = useApp()
+  const queryClient = useQueryClient()
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false)
   const [profileDialogOpen, setProfileDialogOpen] = useState(false)
   const [profileName, setProfileName] = useState('')
@@ -70,10 +72,16 @@ export function MainLayout() {
   }
 
   const confirmLogout = async () => {
-    await logout()
     setLogoutDialogOpen(false)
+
+    // Limpiar cache de React Query
+    queryClient.clear()
+
+    // Cerrar sesión
+    await logout()
+
     toast.success('Sesión cerrada exitosamente')
-    navigate('/login')
+    navigate('/login', { replace: true })
   }
 
   const openProfileDialog = () => {
