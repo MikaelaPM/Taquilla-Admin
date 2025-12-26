@@ -45,3 +45,5 @@ Sistema administrativo para la gestión de taquillas, ventas y sorteos de loter�
 - `npm run dev`: Inicia el servidor de desarrollo.
 - `npm run build`: Compila la aplicación para producción.
 - `npm run lint`: Ejecuta el linter para verificar el código.
+
+.
