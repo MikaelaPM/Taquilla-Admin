@@ -1,7 +1,8 @@
-import { useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useApp } from '@/contexts/AppContext'
 import { useSalesStats } from '@/hooks/use-sales-stats'
@@ -9,7 +10,7 @@ import { useComercializadoraStats } from '@/hooks/use-comercializadora-stats'
 import { useAgencyStats } from '@/hooks/use-agency-stats'
 import { useTaquillaStats } from '@/hooks/use-taquilla-stats'
 import { formatCurrency } from '@/lib/pot-utils'
-import { format, parseISO } from 'date-fns'
+import { format, parseISO, startOfDay, endOfDay, startOfWeek, isWithinInterval } from 'date-fns'
 import { es } from 'date-fns/locale'
 import {
   CurrencyDollar,
@@ -23,11 +24,10 @@ import {
   CaretDown,
   Clock,
   CheckCircle,
-  Users,
   User,
   CalendarBlank,
-  ChartLineUp,
-  Buildings
+  Buildings,
+  FunnelSimple
 } from '@phosphor-icons/react'
 
 export function DashboardPage() {
@@ -39,7 +39,6 @@ export function DashboardPage() {
     winners,
     winnersLoading,
     loadWinners,
-    taquillas,
     visibleTaquillas,
     visibleTaquillaIds,
     currentUser,
@@ -47,6 +46,29 @@ export function DashboardPage() {
     agencies,
     visibleAgencies
   } = useApp()
+
+  // Fechas de referencia
+  const now = new Date()
+  const todayStart = startOfDay(now)
+  const weekStart = startOfWeek(now, { weekStartsOn: 1 })
+
+  // Estado del rango de fechas pendientes (lo que el usuario está seleccionando)
+  const [pendingDateRange, setPendingDateRange] = useState<{ from: Date; to: Date }>({
+    from: weekStart,
+    to: todayStart
+  })
+
+  // Estado del rango de fechas aplicado (lo que se usa para los cálculos)
+  const [appliedDateRange, setAppliedDateRange] = useState<{ from: Date; to: Date }>({
+    from: weekStart,
+    to: todayStart
+  })
+
+  // Estado para indicar si hay cambios pendientes por aplicar
+  const [hasUnappliedChanges, setHasUnappliedChanges] = useState(false)
+
+  // Estado para indicar que se está aplicando el filtro
+  const [isApplyingFilter, setIsApplyingFilter] = useState(false)
 
   // Determinar si el usuario es admin (puede ver datos globales)
   const isAdmin = currentUser?.userType === 'admin' || !currentUser?.userType
@@ -57,33 +79,64 @@ export function DashboardPage() {
   const isComercializadora = currentUser?.userType === 'comercializadora'
   const isAgencia = currentUser?.userType === 'agencia'
 
-  // Stats de comercializadoras para la tabla semanal (solo para admin)
+  // Stats de comercializadoras para la tabla (solo para admin)
   const { stats: comercializadoraStats, loading: comercializadoraStatsLoading, refresh: refreshComercializadoraStats } = useComercializadoraStats({
     comercializadoras: comercializadoras || [],
     agencies: visibleAgencies || agencies || [],
-    taquillas: visibleTaquillas || []
+    taquillas: visibleTaquillas || [],
+    dateFrom: appliedDateRange.from,
+    dateTo: appliedDateRange.to
   })
 
-  // Stats de agencias para la tabla semanal (para comercializadoras)
+  // Stats de agencias para la tabla (para comercializadoras)
   const { stats: agencyStats, loading: agencyStatsLoading, refresh: refreshAgencyStats } = useAgencyStats({
     agencies: visibleAgencies || [],
-    taquillas: visibleTaquillas || []
+    taquillas: visibleTaquillas || [],
+    dateFrom: appliedDateRange.from,
+    dateTo: appliedDateRange.to
   })
 
-  // Stats de taquillas para la tabla semanal (para agencias)
+  // Stats de taquillas para la tabla (para agencias)
   const { stats: taquillaStats, loading: taquillaStatsLoading, refresh: refreshTaquillaStats } = useTaquillaStats({
-    taquillas: visibleTaquillas || []
+    taquillas: visibleTaquillas || [],
+    dateFrom: appliedDateRange.from,
+    dateTo: appliedDateRange.to
   })
 
-  // Ganadores del día (ya filtrados por visibleTaquillaIds)
-  const todayWinners = useMemo(() => {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    return winners.filter(w => new Date(w.createdAt) >= today)
-  }, [winners])
+  // Determinar qué período usar basándose en el rango de fechas aplicado
+  // Ahora siempre usamos 'range' para los cálculos personalizados
+  const periodType = useMemo(() => {
+    const fromDate = startOfDay(appliedDateRange.from)
+    const toDate = startOfDay(appliedDateRange.to)
+    const today = startOfDay(new Date())
+    const weekStartDate = startOfWeek(today, { weekStartsOn: 1 })
 
-  // Totales del día desde comercializadoras (para admin)
-  const comercializadoraTodayTotals = useMemo(() => {
+    // Si from y to son el mismo día y es hoy -> 'today'
+    if (fromDate.getTime() === toDate.getTime() && fromDate.getTime() === today.getTime()) {
+      return 'today'
+    }
+
+    // Si el rango es aproximadamente una semana (desde inicio de semana hasta hoy) -> 'week'
+    if (fromDate.getTime() === weekStartDate.getTime() && toDate.getTime() === today.getTime()) {
+      return 'week'
+    }
+
+    // Para cualquier otro rango usar 'range' (rango personalizado)
+    return 'range'
+  }, [appliedDateRange])
+
+  // Ganadores filtrados por rango de fechas aplicado
+  const filteredWinners = useMemo(() => {
+    const fromDate = startOfDay(appliedDateRange.from)
+    const toDate = endOfDay(appliedDateRange.to)
+    return winners.filter(w => {
+      const winnerDate = new Date(w.createdAt)
+      return isWithinInterval(winnerDate, { start: fromDate, end: toDate })
+    })
+  }, [winners, appliedDateRange])
+
+  // Totales desde comercializadoras (para admin)
+  const comercializadoraTotals = useMemo(() => {
     if (!comercializadoraStats || comercializadoraStats.length === 0) {
       return {
         totalSales: 0,
@@ -93,23 +146,44 @@ export function DashboardPage() {
         totalProfit: 0
       }
     }
-    return comercializadoraStats.reduce((acc, stat) => ({
-      totalSales: acc.totalSales + stat.todaySales,
-      totalPrizes: acc.totalPrizes + stat.todayPrizes,
-      totalCommissions: acc.totalCommissions + stat.todaySalesCommission,
-      totalBalance: acc.totalBalance + stat.todayBalance,
-      totalProfit: acc.totalProfit + stat.todayProfit
-    }), {
+    return comercializadoraStats.reduce((acc, stat) => {
+      if (periodType === 'today') {
+        return {
+          totalSales: acc.totalSales + stat.todaySales,
+          totalPrizes: acc.totalPrizes + stat.todayPrizes,
+          totalCommissions: acc.totalCommissions + stat.todaySalesCommission,
+          totalBalance: acc.totalBalance + stat.todayBalance,
+          totalProfit: acc.totalProfit + stat.todayProfit
+        }
+      } else if (periodType === 'week') {
+        return {
+          totalSales: acc.totalSales + stat.weekSales,
+          totalPrizes: acc.totalPrizes + stat.weekPrizes,
+          totalCommissions: acc.totalCommissions + stat.weekSalesCommission,
+          totalBalance: acc.totalBalance + stat.weekBalance,
+          totalProfit: acc.totalProfit + stat.weekProfit
+        }
+      } else {
+        // Usar datos del rango personalizado
+        return {
+          totalSales: acc.totalSales + stat.rangeSales,
+          totalPrizes: acc.totalPrizes + stat.rangePrizes,
+          totalCommissions: acc.totalCommissions + stat.rangeSalesCommission,
+          totalBalance: acc.totalBalance + stat.rangeBalance,
+          totalProfit: acc.totalProfit + stat.rangeProfit
+        }
+      }
+    }, {
       totalSales: 0,
       totalPrizes: 0,
       totalCommissions: 0,
       totalBalance: 0,
       totalProfit: 0
     })
-  }, [comercializadoraStats])
+  }, [comercializadoraStats, periodType])
 
-  // Totales del día desde agencias (para comercializadora)
-  const agencyTodayTotals = useMemo(() => {
+  // Totales desde agencias (para comercializadora)
+  const agencyTotals = useMemo(() => {
     if (!agencyStats || agencyStats.length === 0) {
       return {
         totalSales: 0,
@@ -118,21 +192,40 @@ export function DashboardPage() {
         totalBalance: 0
       }
     }
-    return agencyStats.reduce((acc, stat) => ({
-      totalSales: acc.totalSales + stat.todaySales,
-      totalPrizes: acc.totalPrizes + stat.todayPrizes,
-      totalCommissions: acc.totalCommissions + stat.todaySalesCommission,
-      totalBalance: acc.totalBalance + stat.todayBalance
-    }), {
+    return agencyStats.reduce((acc, stat) => {
+      if (periodType === 'today') {
+        return {
+          totalSales: acc.totalSales + stat.todaySales,
+          totalPrizes: acc.totalPrizes + stat.todayPrizes,
+          totalCommissions: acc.totalCommissions + stat.todaySalesCommission,
+          totalBalance: acc.totalBalance + stat.todayBalance
+        }
+      } else if (periodType === 'week') {
+        return {
+          totalSales: acc.totalSales + stat.weekSales,
+          totalPrizes: acc.totalPrizes + stat.weekPrizes,
+          totalCommissions: acc.totalCommissions + stat.weekSalesCommission,
+          totalBalance: acc.totalBalance + stat.weekBalance
+        }
+      } else {
+        // Usar datos del rango personalizado
+        return {
+          totalSales: acc.totalSales + stat.rangeSales,
+          totalPrizes: acc.totalPrizes + stat.rangePrizes,
+          totalCommissions: acc.totalCommissions + stat.rangeSalesCommission,
+          totalBalance: acc.totalBalance + stat.rangeBalance
+        }
+      }
+    }, {
       totalSales: 0,
       totalPrizes: 0,
       totalCommissions: 0,
       totalBalance: 0
     })
-  }, [agencyStats])
+  }, [agencyStats, periodType])
 
-  // Totales del día desde taquillas (para agencia)
-  const taquillaTodayTotals = useMemo(() => {
+  // Totales desde taquillas (para agencia)
+  const taquillaTotals = useMemo(() => {
     if (!taquillaStats || taquillaStats.length === 0) {
       return {
         totalSales: 0,
@@ -141,33 +234,56 @@ export function DashboardPage() {
         totalBalance: 0
       }
     }
-    return taquillaStats.reduce((acc, stat) => ({
-      totalSales: acc.totalSales + stat.todaySales,
-      totalPrizes: acc.totalPrizes + stat.todayPrizes,
-      totalCommissions: acc.totalCommissions + stat.todaySalesCommission,
-      totalBalance: acc.totalBalance + stat.todayBalance
-    }), {
+    return taquillaStats.reduce((acc, stat) => {
+      if (periodType === 'today') {
+        return {
+          totalSales: acc.totalSales + stat.todaySales,
+          totalPrizes: acc.totalPrizes + stat.todayPrizes,
+          totalCommissions: acc.totalCommissions + stat.todaySalesCommission,
+          totalBalance: acc.totalBalance + stat.todayBalance
+        }
+      } else if (periodType === 'week') {
+        return {
+          totalSales: acc.totalSales + stat.weekSales,
+          totalPrizes: acc.totalPrizes + stat.weekPrizes,
+          totalCommissions: acc.totalCommissions + stat.weekSalesCommission,
+          totalBalance: acc.totalBalance + stat.weekBalance
+        }
+      } else {
+        // Usar datos del rango personalizado
+        return {
+          totalSales: acc.totalSales + stat.rangeSales,
+          totalPrizes: acc.totalPrizes + stat.rangePrizes,
+          totalCommissions: acc.totalCommissions + stat.rangeSalesCommission,
+          totalBalance: acc.totalBalance + stat.rangeBalance
+        }
+      }
+    }, {
       totalSales: 0,
       totalPrizes: 0,
       totalCommissions: 0,
       totalBalance: 0
     })
-  }, [taquillaStats])
+  }, [taquillaStats, periodType])
 
-  // Estadísticas de resultados del día - usando datos según el perfil del usuario
-  const todayStats = useMemo(() => {
-    const today = format(new Date(), 'yyyy-MM-dd')
-    const todayResults = dailyResults.filter(r => r.resultDate === today)
-    const resultsCount = todayResults.length
-    const resultsWithWinners = todayResults.filter(r => (r.totalToPay || 0) > 0).length
+  // Estadísticas de resultados - usando datos según el perfil del usuario
+  const periodStats = useMemo(() => {
+    const fromDate = startOfDay(appliedDateRange.from)
+    const toDate = endOfDay(appliedDateRange.to)
+    const filteredResults = dailyResults.filter(r => {
+      const resultDate = parseISO(r.resultDate)
+      return isWithinInterval(resultDate, { start: fromDate, end: toDate })
+    })
+    const resultsCount = filteredResults.length
+    const resultsWithWinners = filteredResults.filter(r => (r.totalToPay || 0) > 0).length
 
     // Para ADMIN: usar datos de comercializadoras
     if (isAdmin && comercializadoraStats && comercializadoraStats.length > 0) {
       return {
-        totalSales: comercializadoraTodayTotals.totalSales,
-        totalPayout: comercializadoraTodayTotals.totalPrizes,
-        totalCommissions: comercializadoraTodayTotals.totalCommissions,
-        totalRaised: comercializadoraTodayTotals.totalBalance,
+        totalSales: comercializadoraTotals.totalSales,
+        totalPayout: comercializadoraTotals.totalPrizes,
+        totalCommissions: comercializadoraTotals.totalCommissions,
+        totalRaised: comercializadoraTotals.totalBalance,
         resultsCount,
         resultsWithWinners
       }
@@ -176,10 +292,10 @@ export function DashboardPage() {
     // Para COMERCIALIZADORA: usar datos de agencias
     if (isComercializadora && agencyStats && agencyStats.length > 0) {
       return {
-        totalSales: agencyTodayTotals.totalSales,
-        totalPayout: agencyTodayTotals.totalPrizes,
-        totalCommissions: agencyTodayTotals.totalCommissions,
-        totalRaised: agencyTodayTotals.totalBalance,
+        totalSales: agencyTotals.totalSales,
+        totalPayout: agencyTotals.totalPrizes,
+        totalCommissions: agencyTotals.totalCommissions,
+        totalRaised: agencyTotals.totalBalance,
         resultsCount,
         resultsWithWinners
       }
@@ -188,29 +304,30 @@ export function DashboardPage() {
     // Para AGENCIA: usar datos de taquillas
     if (isAgencia && taquillaStats && taquillaStats.length > 0) {
       return {
-        totalSales: taquillaTodayTotals.totalSales,
-        totalPayout: taquillaTodayTotals.totalPrizes,
-        totalCommissions: taquillaTodayTotals.totalCommissions,
-        totalRaised: taquillaTodayTotals.totalBalance,
+        totalSales: taquillaTotals.totalSales,
+        totalPayout: taquillaTotals.totalPrizes,
+        totalCommissions: taquillaTotals.totalCommissions,
+        totalRaised: taquillaTotals.totalBalance,
         resultsCount,
         resultsWithWinners
       }
     }
 
     // Fallback: usar datos de salesStats
-    const totalPayout = todayWinners.reduce((sum, w) => sum + w.potentialWin, 0)
-    const taquillaCommissions = salesStats.todayTaquillaCommissions || 0
-    const totalRaised = salesStats.todaySales - totalPayout - taquillaCommissions
+    const sales = periodType === 'today' ? salesStats.todaySales : salesStats.weekSales
+    const totalPayout = filteredWinners.reduce((sum, w) => sum + w.potentialWin, 0)
+    const taquillaCommissions = periodType === 'today' ? salesStats.todayTaquillaCommissions : (salesStats.weekTaquillaCommissions || 0)
+    const totalRaised = sales - totalPayout - taquillaCommissions
 
     return {
-      totalSales: salesStats.todaySales,
+      totalSales: sales,
       totalPayout,
       totalCommissions: taquillaCommissions,
       totalRaised,
       resultsCount,
       resultsWithWinners
     }
-  }, [dailyResults, todayWinners, salesStats, comercializadoraStats, comercializadoraTodayTotals, agencyStats, agencyTodayTotals, taquillaStats, taquillaTodayTotals, isAdmin, isComercializadora, isAgencia])
+  }, [dailyResults, appliedDateRange, filteredWinners, salesStats, comercializadoraStats, comercializadoraTotals, agencyStats, agencyTotals, taquillaStats, taquillaTotals, isAdmin, isComercializadora, isAgencia, periodType])
 
   // Últimos resultados (para todos los usuarios)
   const latestResults = useMemo(() => {
@@ -238,7 +355,68 @@ export function DashboardPage() {
     }
   }
 
-  const isLoading = dailyResultsLoading || winnersLoading || salesLoading || comercializadoraStatsLoading || agencyStatsLoading || taquillaStatsLoading
+  // Función para parsear fecha del input sin problemas de timezone
+  const parseDateInput = (dateString: string): Date => {
+    // El input type="date" devuelve 'yyyy-MM-dd'
+    // Parseamos manualmente para evitar problemas de timezone
+    const [year, month, day] = dateString.split('-').map(Number)
+    return new Date(year, month - 1, day) // month es 0-indexed
+  }
+
+  // Handlers para cambio de fechas pendientes
+  const handleFromDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newFrom = parseDateInput(e.target.value)
+    if (!isNaN(newFrom.getTime())) {
+      setPendingDateRange(prev => ({
+        ...prev,
+        from: newFrom,
+        // Ajustar fecha "hasta" si es menor a la nueva fecha "desde"
+        to: newFrom > prev.to ? newFrom : prev.to
+      }))
+      setHasUnappliedChanges(true)
+    }
+  }
+
+  const handleToDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newTo = parseDateInput(e.target.value)
+    if (!isNaN(newTo.getTime())) {
+      // No permitir que "hasta" sea menor que "desde"
+      if (newTo < pendingDateRange.from) {
+        return // No hacer nada si la fecha es inválida
+      }
+      setPendingDateRange(prev => ({
+        ...prev,
+        to: newTo
+      }))
+      setHasUnappliedChanges(true)
+    }
+  }
+
+  // Aplicar el filtro de fechas
+  const handleApplyFilter = useCallback(async () => {
+    setIsApplyingFilter(true)
+    setAppliedDateRange(pendingDateRange)
+    setHasUnappliedChanges(false)
+
+    // Esperar un pequeño delay para que los hooks se actualicen
+    await new Promise(resolve => setTimeout(resolve, 100))
+    setIsApplyingFilter(false)
+  }, [pendingDateRange])
+
+  const isLoading = dailyResultsLoading || winnersLoading || salesLoading || comercializadoraStatsLoading || agencyStatsLoading || taquillaStatsLoading || isApplyingFilter
+
+  // Validar si las fechas pendientes son válidas
+  const isDateRangeValid = pendingDateRange.to >= pendingDateRange.from
+
+  // Etiqueta del período aplicado
+  const getPeriodLabel = () => {
+    const fromStr = format(appliedDateRange.from, "dd/MM/yyyy", { locale: es })
+    const toStr = format(appliedDateRange.to, "dd/MM/yyyy", { locale: es })
+    if (fromStr === toStr) {
+      return fromStr
+    }
+    return `${fromStr} - ${toStr}`
+  }
 
   return (
     <div className="space-y-6">
@@ -262,7 +440,62 @@ export function DashboardPage() {
         </Button>
       </div>
 
-      {/* Estadísticas principales del día */}
+      {/* Filtro de rango de fechas */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <CalendarBlank className="h-5 w-5 text-primary" />
+              <span className="font-medium text-sm">Período:</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <label htmlFor="from-date" className="text-xs text-muted-foreground">Desde:</label>
+              <Input
+                id="from-date"
+                type="date"
+                className="h-8 w-[140px] text-xs"
+                value={format(pendingDateRange.from, 'yyyy-MM-dd')}
+                onChange={handleFromDateChange}
+                max={format(new Date(), 'yyyy-MM-dd')}
+                disabled={isApplyingFilter}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <label htmlFor="to-date" className="text-xs text-muted-foreground">Hasta:</label>
+              <Input
+                id="to-date"
+                type="date"
+                className={`h-8 w-[140px] text-xs ${!isDateRangeValid ? 'border-destructive' : ''}`}
+                value={format(pendingDateRange.to, 'yyyy-MM-dd')}
+                onChange={handleToDateChange}
+                min={format(pendingDateRange.from, 'yyyy-MM-dd')}
+                max={format(new Date(), 'yyyy-MM-dd')}
+                disabled={isApplyingFilter}
+              />
+            </div>
+            <Button
+              size="sm"
+              onClick={handleApplyFilter}
+              disabled={!hasUnappliedChanges || !isDateRangeValid || isApplyingFilter}
+              className="gap-2"
+            >
+              {isApplyingFilter ? (
+                <>
+                  <ArrowsClockwise className="h-4 w-4 animate-spin" />
+                  Aplicando...
+                </>
+              ) : (
+                <>
+                  <FunnelSimple className="h-4 w-4" weight="bold" />
+                  Aplicar Filtro
+                </>
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Estadísticas principales */}
       <div className={`grid gap-4 md:grid-cols-2 ${isAdmin ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
         <Card className="border-l-4 border-l-blue-500">
           <CardContent className="p-4">
@@ -271,12 +504,9 @@ export function DashboardPage() {
                 <CurrencyDollar className="h-5 w-5 text-white" weight="bold" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{formatCurrency(todayStats.totalSales)}</p>
-                <p className="text-xs text-muted-foreground">Ventas del Día</p>
+                <p className="text-2xl font-bold">{formatCurrency(periodStats.totalSales)}</p>
+                <p className="text-xs text-muted-foreground">Ventas</p>
               </div>
-            </div>
-            <div className="mt-2 text-xs text-muted-foreground">
-              {salesStats.todayBetsCount} jugadas registradas
             </div>
           </CardContent>
         </Card>
@@ -288,12 +518,12 @@ export function DashboardPage() {
                 <Trophy className="h-5 w-5 text-white" weight="fill" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-red-600">{formatCurrency(todayStats.totalPayout)}</p>
-                <p className="text-xs text-muted-foreground">Premios del Día</p>
+                <p className="text-2xl font-bold text-red-600">{formatCurrency(periodStats.totalPayout)}</p>
+                <p className="text-xs text-muted-foreground">Premios</p>
               </div>
             </div>
             <div className="mt-2 text-xs text-muted-foreground">
-              {todayWinners.length} jugadas ganadoras
+              {filteredWinners.length} jugadas ganadoras
             </div>
           </CardContent>
         </Card>
@@ -305,19 +535,19 @@ export function DashboardPage() {
                 <TrendUp className="h-5 w-5 text-white" weight="bold" />
               </div>
               <div>
-                <p className={`text-2xl font-bold ${todayStats.totalRaised >= 0 ? 'text-emerald-600' : 'text-amber-600'}`}>
-                  {formatCurrency(Math.abs(todayStats.totalRaised))}
+                <p className={`text-2xl font-bold ${periodStats.totalRaised >= 0 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                  {formatCurrency(Math.abs(periodStats.totalRaised))}
                 </p>
                 <p className="text-xs text-muted-foreground flex items-center gap-1">
-                  {todayStats.totalRaised >= 0 ? (
+                  {periodStats.totalRaised >= 0 ? (
                     <>
                       <CaretUp className="h-3 w-3 text-emerald-600" weight="bold" />
-                      Ganancia Hoy
+                      Ganancia
                     </>
                   ) : (
                     <>
                       <CaretDown className="h-3 w-3 text-amber-600" weight="bold" />
-                      Pérdida Hoy
+                      Pérdida
                     </>
                   )}
                 </p>
@@ -326,7 +556,7 @@ export function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Sorteos del Día - Solo visible para admin */}
+        {/* Sorteos - Solo visible para admin */}
         {isAdmin && (
           <Card className="border-l-4 border-l-purple-500">
             <CardContent className="p-4">
@@ -335,12 +565,12 @@ export function DashboardPage() {
                   <Receipt className="h-5 w-5 text-white" weight="fill" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{todayStats.resultsCount}</p>
-                  <p className="text-xs text-muted-foreground">Sorteos del Día</p>
+                  <p className="text-2xl font-bold">{periodStats.resultsCount}</p>
+                  <p className="text-xs text-muted-foreground">Sorteos</p>
                 </div>
               </div>
               <div className="mt-2 text-xs text-muted-foreground">
-                {todayStats.resultsWithWinners} con ganadores
+                {periodStats.resultsWithWinners} con ganadores
               </div>
             </CardContent>
           </Card>
@@ -392,16 +622,13 @@ export function DashboardPage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-pink-500 to-pink-600 flex items-center justify-center">
-                  <ChartLineUp className="h-5 w-5 text-white" weight="bold" />
+                  <Receipt className="h-5 w-5 text-white" weight="bold" />
                 </div>
                 <div>
-                  <p className="text-xl font-bold">{formatCurrency(salesStats.monthSales)}</p>
-                  <p className="text-xs text-muted-foreground">Ventas del Mes</p>
+                  <p className="text-xl font-bold">{formatCurrency(periodStats.totalCommissions)}</p>
+                  <p className="text-xs text-muted-foreground">Comisiones</p>
                 </div>
               </div>
-              <Badge variant="outline" className="text-xs">
-                {salesStats.monthBetsCount} jugadas
-              </Badge>
             </div>
           </CardContent>
         </Card>
@@ -459,18 +686,18 @@ export function DashboardPage() {
           </Card>
         )}
 
-        {/* Top Taquillas del día */}
+        {/* Top Taquillas */}
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-4">
               <Storefront className="h-5 w-5 text-primary" />
-              <h3 className="font-semibold">Top Taquillas Hoy</h3>
+              <h3 className="font-semibold">Top Taquillas</h3>
               <Badge variant="outline" className="ml-auto text-xs">Ventas</Badge>
             </div>
             {salesStats.salesByTaquilla.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-center">
                 <Storefront className="h-10 w-10 text-muted-foreground mb-2" />
-                <p className="text-sm text-muted-foreground">No hay ventas registradas hoy</p>
+                <p className="text-sm text-muted-foreground">No hay ventas registradas</p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -494,52 +721,16 @@ export function DashboardPage() {
         </Card>
       </div>
 
-      {/* Resumen semanal y mensual */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center gap-2 mb-4">
-            <CalendarBlank className="h-5 w-5 text-primary" />
-            <h3 className="font-semibold">Resumen de Ventas</h3>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="p-4 rounded-lg bg-blue-50 border border-blue-100">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="h-2 w-2 rounded-full bg-blue-500"></div>
-                <p className="text-xs font-medium text-blue-700">Hoy</p>
-              </div>
-              <p className="text-xl font-bold text-blue-700">{formatCurrency(salesStats.todaySales)}</p>
-              <p className="text-xs text-blue-600">{salesStats.todayBetsCount} jugadas</p>
-            </div>
-
-            <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-100">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="h-2 w-2 rounded-full bg-emerald-500"></div>
-                <p className="text-xs font-medium text-emerald-700">Esta Semana</p>
-              </div>
-              <p className="text-xl font-bold text-emerald-700">{formatCurrency(salesStats.weekSales)}</p>
-              <p className="text-xs text-emerald-600">{salesStats.weekBetsCount} jugadas</p>
-            </div>
-
-            <div className="p-4 rounded-lg bg-purple-50 border border-purple-100">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="h-2 w-2 rounded-full bg-purple-500"></div>
-                <p className="text-xs font-medium text-purple-700">Este Mes</p>
-              </div>
-              <p className="text-xl font-bold text-purple-700">{formatCurrency(salesStats.monthSales)}</p>
-              <p className="text-xs text-purple-600">{salesStats.monthBetsCount} jugadas</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Ventas del Día por Comercializadora (solo para admin) */}
+      {/* Desglose por Comercializadora (solo para admin) */}
       {!isComercializadora && !isAgencia && comercializadoras && comercializadoras.length > 0 && (
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-4">
               <Buildings className="h-5 w-5 text-primary" />
-              <h3 className="font-semibold">Desglose del Día por Comercializadora</h3>
-              <Badge variant="outline" className="ml-auto text-xs bg-blue-50 text-blue-700 border-blue-200">Hoy</Badge>
+              <h3 className="font-semibold">Desglose por Comercializadora</h3>
+              <Badge variant="outline" className="ml-auto text-xs bg-blue-50 text-blue-700 border-blue-200">
+                {getPeriodLabel()}
+              </Badge>
             </div>
             {comercializadoraStatsLoading ? (
               <div className="flex flex-col items-center justify-center py-8 text-center">
@@ -549,7 +740,7 @@ export function DashboardPage() {
             ) : comercializadoraStats.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-center">
                 <Buildings className="h-10 w-10 text-muted-foreground mb-2" />
-                <p className="text-sm text-muted-foreground">No hay comercializadoras con ventas hoy</p>
+                <p className="text-sm text-muted-foreground">No hay comercializadoras con ventas</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -565,60 +756,67 @@ export function DashboardPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {comercializadoraStats.map((stat) => (
-                      <TableRow key={stat.comercializadoraId}>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center">
-                              <Buildings className="h-4 w-4 text-white" weight="fill" />
+                    {comercializadoraStats.map((stat) => {
+                      const sales = periodType === 'today' ? stat.todaySales : periodType === 'week' ? stat.weekSales : stat.rangeSales
+                      const prizes = periodType === 'today' ? stat.todayPrizes : periodType === 'week' ? stat.weekPrizes : stat.rangePrizes
+                      const commission = periodType === 'today' ? stat.todaySalesCommission : periodType === 'week' ? stat.weekSalesCommission : stat.rangeSalesCommission
+                      const balance = periodType === 'today' ? stat.todayBalance : periodType === 'week' ? stat.weekBalance : stat.rangeBalance
+                      const profit = periodType === 'today' ? stat.todayProfit : periodType === 'week' ? stat.weekProfit : stat.rangeProfit
+                      return (
+                        <TableRow key={stat.comercializadoraId}>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center">
+                                <Buildings className="h-4 w-4 text-white" weight="fill" />
+                              </div>
+                              <span className="font-medium">{stat.comercializadoraName}</span>
                             </div>
-                            <span className="font-medium">{stat.comercializadoraName}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right font-semibold text-blue-600">
-                          {formatCurrency(stat.todaySales)}
-                        </TableCell>
-                        <TableCell className="text-right font-semibold text-red-600">
-                          {formatCurrency(stat.todayPrizes)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex flex-col items-end">
-                            <span className="font-medium text-amber-600">{formatCurrency(stat.todaySalesCommission)}</span>
-                            <span className="text-xs text-muted-foreground">({stat.shareOnSales}%)</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <span className={`font-bold ${stat.todayBalance >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                            {formatCurrency(stat.todayBalance)}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex flex-col items-end">
-                            <span className="font-bold text-purple-600">{formatCurrency(stat.todayProfit)}</span>
-                            <span className="text-xs text-muted-foreground">({stat.shareOnProfits}%)</span>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold text-blue-600">
+                            {formatCurrency(sales)}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold text-red-600">
+                            {formatCurrency(prizes)}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex flex-col items-end">
+                              <span className="font-medium text-amber-600">{formatCurrency(commission)}</span>
+                              <span className="text-xs text-muted-foreground">({stat.shareOnSales}%)</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <span className={`font-bold ${balance >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                              {formatCurrency(balance)}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex flex-col items-end">
+                              <span className="font-bold text-purple-600">{formatCurrency(profit)}</span>
+                              <span className="text-xs text-muted-foreground">({stat.shareOnProfits}%)</span>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
                     {/* Fila de totales */}
                     <TableRow className="bg-muted/50 font-bold">
                       <TableCell>
                         <span className="font-bold">TOTALES</span>
                       </TableCell>
                       <TableCell className="text-right text-blue-600">
-                        {formatCurrency(comercializadoraTodayTotals.totalSales)}
+                        {formatCurrency(comercializadoraTotals.totalSales)}
                       </TableCell>
                       <TableCell className="text-right text-red-600">
-                        {formatCurrency(comercializadoraTodayTotals.totalPrizes)}
+                        {formatCurrency(comercializadoraTotals.totalPrizes)}
                       </TableCell>
                       <TableCell className="text-right text-amber-600">
-                        {formatCurrency(comercializadoraTodayTotals.totalCommissions)}
+                        {formatCurrency(comercializadoraTotals.totalCommissions)}
                       </TableCell>
-                      <TableCell className={`text-right ${comercializadoraTodayTotals.totalBalance >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                        {formatCurrency(comercializadoraTodayTotals.totalBalance)}
+                      <TableCell className={`text-right ${comercializadoraTotals.totalBalance >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                        {formatCurrency(comercializadoraTotals.totalBalance)}
                       </TableCell>
                       <TableCell className="text-right text-purple-600">
-                        {formatCurrency(comercializadoraTodayTotals.totalProfit)}
+                        {formatCurrency(comercializadoraTotals.totalProfit)}
                       </TableCell>
                     </TableRow>
                   </TableBody>
@@ -629,14 +827,16 @@ export function DashboardPage() {
         </Card>
       )}
 
-      {/* Desglose del Día por Agencia (para comercializadoras) */}
+      {/* Desglose por Agencia (para comercializadoras) */}
       {isComercializadora && !isAgencia && visibleAgencies && visibleAgencies.length > 0 && (
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-4">
               <Storefront className="h-5 w-5 text-primary" />
-              <h3 className="font-semibold">Desglose del Día por Agencia</h3>
-              <Badge variant="outline" className="ml-auto text-xs bg-blue-50 text-blue-700 border-blue-200">Hoy</Badge>
+              <h3 className="font-semibold">Desglose por Agencia</h3>
+              <Badge variant="outline" className="ml-auto text-xs bg-blue-50 text-blue-700 border-blue-200">
+                {getPeriodLabel()}
+              </Badge>
             </div>
             {agencyStatsLoading ? (
               <div className="flex flex-col items-center justify-center py-8 text-center">
@@ -646,7 +846,7 @@ export function DashboardPage() {
             ) : agencyStats.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-center">
                 <Storefront className="h-10 w-10 text-muted-foreground mb-2" />
-                <p className="text-sm text-muted-foreground">No hay agencias con ventas hoy</p>
+                <p className="text-sm text-muted-foreground">No hay agencias con ventas</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -661,51 +861,57 @@ export function DashboardPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {agencyStats.map((stat) => (
-                      <TableRow key={stat.agencyId}>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-cyan-500 to-cyan-600 flex items-center justify-center">
-                              <Storefront className="h-4 w-4 text-white" weight="fill" />
+                    {agencyStats.map((stat) => {
+                      const sales = periodType === 'today' ? stat.todaySales : periodType === 'week' ? stat.weekSales : stat.rangeSales
+                      const prizes = periodType === 'today' ? stat.todayPrizes : periodType === 'week' ? stat.weekPrizes : stat.rangePrizes
+                      const commission = periodType === 'today' ? stat.todaySalesCommission : periodType === 'week' ? stat.weekSalesCommission : stat.rangeSalesCommission
+                      const balance = periodType === 'today' ? stat.todayBalance : periodType === 'week' ? stat.weekBalance : stat.rangeBalance
+                      return (
+                        <TableRow key={stat.agencyId}>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-cyan-500 to-cyan-600 flex items-center justify-center">
+                                <Storefront className="h-4 w-4 text-white" weight="fill" />
+                              </div>
+                              <span className="font-medium">{stat.agencyName}</span>
                             </div>
-                            <span className="font-medium">{stat.agencyName}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right font-semibold text-blue-600">
-                          {formatCurrency(stat.todaySales)}
-                        </TableCell>
-                        <TableCell className="text-right font-semibold text-red-600">
-                          {formatCurrency(stat.todayPrizes)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex flex-col items-end">
-                            <span className="font-medium text-amber-600">{formatCurrency(stat.todaySalesCommission)}</span>
-                            <span className="text-xs text-muted-foreground">({stat.shareOnSales}%)</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <span className={`font-bold ${stat.todayBalance >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                            {formatCurrency(stat.todayBalance)}
-                          </span>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold text-blue-600">
+                            {formatCurrency(sales)}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold text-red-600">
+                            {formatCurrency(prizes)}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex flex-col items-end">
+                              <span className="font-medium text-amber-600">{formatCurrency(commission)}</span>
+                              <span className="text-xs text-muted-foreground">({stat.shareOnSales}%)</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <span className={`font-bold ${balance >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                              {formatCurrency(balance)}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
                     {/* Fila de totales */}
                     <TableRow className="bg-muted/50 font-bold">
                       <TableCell>
                         <span className="font-bold">TOTALES</span>
                       </TableCell>
                       <TableCell className="text-right text-blue-600">
-                        {formatCurrency(agencyTodayTotals.totalSales)}
+                        {formatCurrency(agencyTotals.totalSales)}
                       </TableCell>
                       <TableCell className="text-right text-red-600">
-                        {formatCurrency(agencyTodayTotals.totalPrizes)}
+                        {formatCurrency(agencyTotals.totalPrizes)}
                       </TableCell>
                       <TableCell className="text-right text-amber-600">
-                        {formatCurrency(agencyTodayTotals.totalCommissions)}
+                        {formatCurrency(agencyTotals.totalCommissions)}
                       </TableCell>
-                      <TableCell className={`text-right ${agencyTodayTotals.totalBalance >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                        {formatCurrency(agencyTodayTotals.totalBalance)}
+                      <TableCell className={`text-right ${agencyTotals.totalBalance >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                        {formatCurrency(agencyTotals.totalBalance)}
                       </TableCell>
                     </TableRow>
                   </TableBody>
@@ -716,14 +922,16 @@ export function DashboardPage() {
         </Card>
       )}
 
-      {/* Desglose del Día por Taquilla (para agencias) */}
+      {/* Desglose por Taquilla (para agencias) */}
       {isAgencia && visibleTaquillas && visibleTaquillas.length > 0 && (
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-4">
               <User className="h-5 w-5 text-primary" />
-              <h3 className="font-semibold">Desglose del Día por Taquilla</h3>
-              <Badge variant="outline" className="ml-auto text-xs bg-blue-50 text-blue-700 border-blue-200">Hoy</Badge>
+              <h3 className="font-semibold">Desglose por Taquilla</h3>
+              <Badge variant="outline" className="ml-auto text-xs bg-blue-50 text-blue-700 border-blue-200">
+                {getPeriodLabel()}
+              </Badge>
             </div>
             {taquillaStatsLoading ? (
               <div className="flex flex-col items-center justify-center py-8 text-center">
@@ -733,7 +941,7 @@ export function DashboardPage() {
             ) : taquillaStats.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-center">
                 <User className="h-10 w-10 text-muted-foreground mb-2" />
-                <p className="text-sm text-muted-foreground">No hay taquillas con ventas hoy</p>
+                <p className="text-sm text-muted-foreground">No hay taquillas con ventas</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -748,51 +956,57 @@ export function DashboardPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {taquillaStats.map((stat) => (
-                      <TableRow key={stat.taquillaId}>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-violet-500 to-violet-600 flex items-center justify-center">
-                              <User className="h-4 w-4 text-white" weight="fill" />
+                    {taquillaStats.map((stat) => {
+                      const sales = periodType === 'today' ? stat.todaySales : periodType === 'week' ? stat.weekSales : stat.rangeSales
+                      const prizes = periodType === 'today' ? stat.todayPrizes : periodType === 'week' ? stat.weekPrizes : stat.rangePrizes
+                      const commission = periodType === 'today' ? stat.todaySalesCommission : periodType === 'week' ? stat.weekSalesCommission : stat.rangeSalesCommission
+                      const balance = periodType === 'today' ? stat.todayBalance : periodType === 'week' ? stat.weekBalance : stat.rangeBalance
+                      return (
+                        <TableRow key={stat.taquillaId}>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-violet-500 to-violet-600 flex items-center justify-center">
+                                <User className="h-4 w-4 text-white" weight="fill" />
+                              </div>
+                              <span className="font-medium">{stat.taquillaName}</span>
                             </div>
-                            <span className="font-medium">{stat.taquillaName}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right font-semibold text-blue-600">
-                          {formatCurrency(stat.todaySales)}
-                        </TableCell>
-                        <TableCell className="text-right font-semibold text-red-600">
-                          {formatCurrency(stat.todayPrizes)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex flex-col items-end">
-                            <span className="font-medium text-amber-600">{formatCurrency(stat.todaySalesCommission)}</span>
-                            <span className="text-xs text-muted-foreground">({stat.shareOnSales}%)</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <span className={`font-bold ${stat.todayBalance >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                            {formatCurrency(stat.todayBalance)}
-                          </span>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold text-blue-600">
+                            {formatCurrency(sales)}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold text-red-600">
+                            {formatCurrency(prizes)}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex flex-col items-end">
+                              <span className="font-medium text-amber-600">{formatCurrency(commission)}</span>
+                              <span className="text-xs text-muted-foreground">({stat.shareOnSales}%)</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <span className={`font-bold ${balance >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                              {formatCurrency(balance)}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
                     {/* Fila de totales */}
                     <TableRow className="bg-muted/50 font-bold">
                       <TableCell>
                         <span className="font-bold">TOTALES</span>
                       </TableCell>
                       <TableCell className="text-right text-blue-600">
-                        {formatCurrency(taquillaTodayTotals.totalSales)}
+                        {formatCurrency(taquillaTotals.totalSales)}
                       </TableCell>
                       <TableCell className="text-right text-red-600">
-                        {formatCurrency(taquillaTodayTotals.totalPrizes)}
+                        {formatCurrency(taquillaTotals.totalPrizes)}
                       </TableCell>
                       <TableCell className="text-right text-amber-600">
-                        {formatCurrency(taquillaTodayTotals.totalCommissions)}
+                        {formatCurrency(taquillaTotals.totalCommissions)}
                       </TableCell>
-                      <TableCell className={`text-right ${taquillaTodayTotals.totalBalance >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                        {formatCurrency(taquillaTodayTotals.totalBalance)}
+                      <TableCell className={`text-right ${taquillaTotals.totalBalance >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                        {formatCurrency(taquillaTotals.totalBalance)}
                       </TableCell>
                     </TableRow>
                   </TableBody>

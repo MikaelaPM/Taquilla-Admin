@@ -20,6 +20,11 @@ export interface TaquillaStats {
   monthPrizes: number
   monthSalesCommission: number
   monthBalance: number
+  // Datos del rango personalizado
+  rangeSales: number
+  rangePrizes: number
+  rangeSalesCommission: number
+  rangeBalance: number
   // Legacy
   salesCommission: number
   shareOnSales: number
@@ -32,6 +37,9 @@ export interface UseTaquillaStatsOptions {
     fullName: string
     shareOnSales?: number
   }>
+  // Rango de fechas personalizado (opcional)
+  dateFrom?: Date
+  dateTo?: Date
 }
 
 export function useTaquillaStats(options: UseTaquillaStatsOptions) {
@@ -45,12 +53,19 @@ export function useTaquillaStats(options: UseTaquillaStatsOptions) {
     [options.taquillas]
   )
 
+  // Key para detectar cambios en el rango de fechas
+  const dateRangeKey = useMemo(() => {
+    const from = options.dateFrom ? startOfDay(options.dateFrom).toISOString() : 'default'
+    const to = options.dateTo ? endOfDay(options.dateTo).toISOString() : 'default'
+    return `${from}-${to}`
+  }, [options.dateFrom, options.dateTo])
+
   // Store latest options in a ref to avoid stale closures
   const optionsRef = useRef(options)
   optionsRef.current = options
 
   const loadStats = useCallback(async () => {
-    const { taquillas } = optionsRef.current
+    const { taquillas, dateFrom, dateTo } = optionsRef.current
 
     if (!taquillas || taquillas.length === 0) {
       setStats([])
@@ -63,6 +78,11 @@ export function useTaquillaStats(options: UseTaquillaStatsOptions) {
       setError(null)
 
       const now = new Date()
+      // Usar fechas personalizadas si se proporcionan
+      const queryStart = dateFrom ? startOfDay(dateFrom).toISOString() : startOfMonth(now).toISOString()
+      const queryEnd = dateTo ? endOfDay(dateTo).toISOString() : endOfDay(now).toISOString()
+
+      // Para compatibilidad, mantener referencias fijas
       const todayStart = startOfDay(now).toISOString()
       const weekStart = startOfWeek(now, { weekStartsOn: 1 }).toISOString()
       const monthStart = startOfMonth(now).toISOString()
@@ -78,8 +98,8 @@ export function useTaquillaStats(options: UseTaquillaStatsOptions) {
         .from('bets')
         .select('user_id, amount, created_at')
         .in('user_id', taquillaIds)
-        .gte('created_at', monthStart)
-        .lte('created_at', todayEnd)
+        .gte('created_at', queryStart)
+        .lte('created_at', queryEnd)
         .neq('status', 'cancelled')
 
       if (salesError) {
@@ -88,7 +108,8 @@ export function useTaquillaStats(options: UseTaquillaStatsOptions) {
         return
       }
 
-      // Sum sales by taquilla (mes, semana y día)
+      // Sum sales by taquilla (rango personalizado, mes, semana y día)
+      const rangeSalesByTaquilla = new Map<string, number>()
       const monthSalesByTaquilla = new Map<string, number>()
       const weekSalesByTaquilla = new Map<string, number>()
       const todaySalesByTaquilla = new Map<string, number>()
@@ -96,9 +117,14 @@ export function useTaquillaStats(options: UseTaquillaStatsOptions) {
         const odile = bet.user_id as string
         if (odile) {
           const amount = Number(bet.amount) || 0
-          // Ventas del mes
-          const currentMonth = monthSalesByTaquilla.get(odile) || 0
-          monthSalesByTaquilla.set(odile, currentMonth + amount)
+          // Ventas del rango personalizado (todos los datos del query)
+          const currentRange = rangeSalesByTaquilla.get(odile) || 0
+          rangeSalesByTaquilla.set(odile, currentRange + amount)
+          // Ventas del mes (si está dentro del mes actual)
+          if (bet.created_at >= monthStart) {
+            const currentMonth = monthSalesByTaquilla.get(odile) || 0
+            monthSalesByTaquilla.set(odile, currentMonth + amount)
+          }
           // Ventas de la semana
           if (bet.created_at >= weekStart) {
             const currentWeek = weekSalesByTaquilla.get(odile) || 0
@@ -122,8 +148,8 @@ export function useTaquillaStats(options: UseTaquillaStatsOptions) {
         .select('user_id, potential_bet_amount, status, created_at')
         .in('user_id', taquillaIds)
         .in('status', ['winner', 'paid'])
-        .gte('created_at', monthStart)
-        .lte('created_at', todayEnd)
+        .gte('created_at', queryStart)
+        .lte('created_at', queryEnd)
 
       if (prizesError) {
         console.error('Error fetching prizes:', prizesError)
@@ -131,7 +157,8 @@ export function useTaquillaStats(options: UseTaquillaStatsOptions) {
         return
       }
 
-      // Sum prizes by taquilla (mes, semana y día)
+      // Sum prizes by taquilla (rango personalizado, mes, semana y día)
+      const rangePrizesByTaquilla = new Map<string, number>()
       const monthPrizesByTaquilla = new Map<string, number>()
       const weekPrizesByTaquilla = new Map<string, number>()
       const todayPrizesByTaquilla = new Map<string, number>()
@@ -139,9 +166,14 @@ export function useTaquillaStats(options: UseTaquillaStatsOptions) {
         const odile = item.user_id as string
         if (odile) {
           const amount = Number(item.potential_bet_amount) || 0
-          // Premios del mes
-          const currentMonth = monthPrizesByTaquilla.get(odile) || 0
-          monthPrizesByTaquilla.set(odile, currentMonth + amount)
+          // Premios del rango personalizado (todos los datos del query)
+          const currentRange = rangePrizesByTaquilla.get(odile) || 0
+          rangePrizesByTaquilla.set(odile, currentRange + amount)
+          // Premios del mes (si está dentro del mes actual)
+          if (item.created_at >= monthStart) {
+            const currentMonth = monthPrizesByTaquilla.get(odile) || 0
+            monthPrizesByTaquilla.set(odile, currentMonth + amount)
+          }
           // Premios de la semana
           if (item.created_at >= weekStart) {
             const currentWeek = weekPrizesByTaquilla.get(odile) || 0
@@ -179,6 +211,12 @@ export function useTaquillaStats(options: UseTaquillaStatsOptions) {
         const monthSalesCommission = monthSales * (shareOnSales / 100)
         const monthBalance = monthSales - monthPrizes - monthSalesCommission
 
+        // ---- Datos del RANGO PERSONALIZADO ----
+        const rangeSales = rangeSalesByTaquilla.get(taquilla.id) || 0
+        const rangePrizes = rangePrizesByTaquilla.get(taquilla.id) || 0
+        const rangeSalesCommission = rangeSales * (shareOnSales / 100)
+        const rangeBalance = rangeSales - rangePrizes - rangeSalesCommission
+
         // Legacy
         const salesCommission = weekSalesCommission
         const balance = weekBalance
@@ -198,6 +236,10 @@ export function useTaquillaStats(options: UseTaquillaStatsOptions) {
           monthPrizes,
           monthSalesCommission,
           monthBalance,
+          rangeSales,
+          rangePrizes,
+          rangeSalesCommission,
+          rangeBalance,
           salesCommission,
           shareOnSales,
           balance
@@ -221,7 +263,7 @@ export function useTaquillaStats(options: UseTaquillaStatsOptions) {
     if (taquillasKey) {
       loadStats()
     }
-  }, [taquillasKey, loadStats])
+  }, [taquillasKey, dateRangeKey, loadStats])
 
   return {
     stats,
