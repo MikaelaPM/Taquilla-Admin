@@ -78,7 +78,9 @@ export function ComercializadoraAgenciasPage() {
         parentId: agencyData.parentId || id,
         shareOnSales: agencyData.shareOnSales,
         shareOnProfits: agencyData.shareOnProfits,
-        isActive: agencyData.isActive
+        isActive: agencyData.isActive,
+        // Incluir password solo si se proporcionó
+        ...(agencyData.password ? { password: agencyData.password } : {})
       })
       if (success) {
         toast.success("Agencia actualizada exitosamente")
