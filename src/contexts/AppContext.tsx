@@ -16,6 +16,7 @@ interface AppContextType {
   currentUser: ReturnType<typeof useSupabaseAuth>['currentUser']
   currentUserId: string
   isLoading: boolean
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
   logout: () => Promise<void>
   hasPermission: (permission: string) => boolean
   canViewModule: (module: string) => boolean
@@ -122,7 +123,7 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | null>(null)
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const { currentUser, currentUserId, isLoading, logout, hasPermission } = useSupabaseAuth()
+  const { currentUser, currentUserId, isLoading, login, logout, hasPermission } = useSupabaseAuth()
 
   // Helper para determinar si el usuario puede ver un módulo
   const canViewModule = (module: string): boolean => {
@@ -535,6 +536,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     currentUser,
     currentUserId,
     isLoading,
+    login,
     logout,
     hasPermission,
     canViewModule,
