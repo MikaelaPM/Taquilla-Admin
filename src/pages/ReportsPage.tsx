@@ -177,29 +177,34 @@ export function ReportsPage() {
       // Calcular comisión de la comercializadora basada en su porcentaje sobre el total de ventas
       totalCommissions = totalSales * (comercializadoraShareOnSales / 100)
     } else if (isAgencia && taquillaStats && taquillaStats.length > 0) {
-      // Agencia: sumar de todas sus taquillas
+      // Agencia: sumar ventas y premios de todas sus taquillas
+      // La comisión se calcula con el % de la agencia sobre el total de ventas
+      // Buscar la agencia actual por userId
+      const currentAgency = agencies?.find(a => a.userId === currentUser?.id)
+      const agencyShareOnSales = currentAgency?.shareOnSales || 0
+
       taquillaStats.forEach(stat => {
         if (periodFilter === 'today') {
           totalSales += stat.todaySales
           totalPrizes += stat.todayPrizes
-          totalCommissions += stat.todaySalesCommission
           totalBalance += stat.todayBalance
         } else if (periodFilter === 'week') {
           totalSales += stat.weekSales
           totalPrizes += stat.weekPrizes
-          totalCommissions += stat.weekSalesCommission
           totalBalance += stat.weekBalance
         } else {
           totalSales += stat.monthSales
           totalPrizes += stat.monthPrizes
-          totalCommissions += stat.monthSalesCommission
           totalBalance += stat.monthBalance
         }
       })
+
+      // Calcular comisión de la agencia basada en su porcentaje sobre el total de ventas
+      totalCommissions = totalSales * (agencyShareOnSales / 100)
     }
 
     return { totalSales, totalPrizes, totalCommissions, totalBalance }
-  }, [isAdmin, isComercializadora, isAgencia, comercializadoraStats, agencyStats, taquillaStats, periodFilter, currentUser, comercializadoras])
+  }, [isAdmin, isComercializadora, isAgencia, comercializadoraStats, agencyStats, taquillaStats, periodFilter, currentUser, comercializadoras, agencies])
 
   // Estadísticas principales - usando datos filtrados por taquillas visibles
   const stats = useMemo(() => {
