@@ -212,20 +212,12 @@ export function DashboardPage() {
     }
   }, [dailyResults, todayWinners, salesStats, comercializadoraStats, comercializadoraTodayTotals, agencyStats, agencyTodayTotals, taquillaStats, taquillaTodayTotals, isAdmin, isComercializadora, isAgencia])
 
-  // Últimos resultados (solo para admin - datos globales)
+  // Últimos resultados (para todos los usuarios)
   const latestResults = useMemo(() => {
-    if (!isAdmin) return [] // No mostrar resultados globales para no-admin
     return [...dailyResults]
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .slice(0, 5)
-  }, [dailyResults, isAdmin])
-
-  // Últimos ganadores (para todos los usuarios - filtrados por visibleTaquillaIds)
-  const latestWinners = useMemo(() => {
-    return [...winners]
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      .slice(0, 5)
-  }, [winners])
+  }, [dailyResults])
 
   // Loterías activas
   const activeLotteries = lotteries.filter(l => l.isActive)
@@ -271,7 +263,7 @@ export function DashboardPage() {
       </div>
 
       {/* Estadísticas principales del día */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className={`grid gap-4 md:grid-cols-2 ${isAdmin ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
         <Card className="border-l-4 border-l-blue-500">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
@@ -334,22 +326,25 @@ export function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-l-4 border-l-purple-500">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center">
-                <Receipt className="h-5 w-5 text-white" weight="fill" />
+        {/* Sorteos del Día - Solo visible para admin */}
+        {isAdmin && (
+          <Card className="border-l-4 border-l-purple-500">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center">
+                  <Receipt className="h-5 w-5 text-white" weight="fill" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">{todayStats.resultsCount}</p>
+                  <p className="text-xs text-muted-foreground">Sorteos del Día</p>
+                </div>
               </div>
-              <div>
-                <p className="text-2xl font-bold">{todayStats.resultsCount}</p>
-                <p className="text-xs text-muted-foreground">Sorteos del Día</p>
+              <div className="mt-2 text-xs text-muted-foreground">
+                {todayStats.resultsWithWinners} con ganadores
               </div>
-            </div>
-            <div className="mt-2 text-xs text-muted-foreground">
-              {todayStats.resultsWithWinners} con ganadores
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Segunda fila de métricas */}
@@ -413,26 +408,16 @@ export function DashboardPage() {
       </div>
 
       {/* Contenido principal */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        {/* Últimos resultados (solo para admin) o Últimos ganadores (para todos) */}
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-4">
-              {isAdmin ? (
-                <>
-                  <Clock className="h-5 w-5 text-primary" />
-                  <h3 className="font-semibold">Últimos Resultados</h3>
-                </>
-              ) : (
-                <>
-                  <Trophy className="h-5 w-5 text-primary" />
-                  <h3 className="font-semibold">Últimos Ganadores</h3>
-                </>
-              )}
-            </div>
-            {isAdmin ? (
-              // Vista para admin: Últimos resultados globales
-              latestResults.length === 0 ? (
+      <div className={`grid gap-4 ${isAdmin ? 'lg:grid-cols-2' : 'lg:grid-cols-1'}`}>
+        {/* Últimos resultados - Solo visible para admin */}
+        {isAdmin && (
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 mb-4">
+                <Clock className="h-5 w-5 text-primary" />
+                <h3 className="font-semibold">Últimos Resultados</h3>
+              </div>
+              {latestResults.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-8 text-center">
                   <Clock className="h-10 w-10 text-muted-foreground mb-2" />
                   <p className="text-sm text-muted-foreground">No hay resultados cargados</p>
@@ -469,42 +454,10 @@ export function DashboardPage() {
                     </div>
                   ))}
                 </div>
-              )
-            ) : (
-              // Vista para comercializadora/agencia/taquilla: Últimos ganadores filtrados
-              latestWinners.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <Trophy className="h-10 w-10 text-muted-foreground mb-2" />
-                  <p className="text-sm text-muted-foreground">No hay ganadores registrados</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {latestWinners.map((winner) => (
-                    <div key={winner.id} className="flex items-center gap-3 p-2 rounded-lg bg-muted/30">
-                      <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center">
-                        <span className="text-sm font-bold text-white">
-                          {winner.animalNumber || '??'}
-                        </span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{winner.lotteryName}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {winner.taquillaName}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-bold text-amber-600">{formatCurrency(winner.potentialWin)}</p>
-                        <p className="text-xs text-muted-foreground">
-                          Apostó: {formatCurrency(winner.amount)}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )
-            )}
-          </CardContent>
-        </Card>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Top Taquillas del día */}
         <Card>
