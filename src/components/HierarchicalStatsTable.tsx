@@ -399,7 +399,7 @@ function ExpandableRow({ entity, level, dateFrom, dateTo, allUsers, showProfitCo
             {formatCurrency(entity.balance)}
           </span>
         </TableCell>
-        {(entity.type === 'comercializadora' || entity.type === 'subdistribuidor') ? (
+        {(entity.type === 'comercializadora' || entity.type === 'subdistribuidor' || entity.type === 'agencia') ? (
           entity.balance > 0 ? (
             <>
               <TableCell className="text-right">
@@ -465,8 +465,8 @@ export function HierarchicalStatsTable({
     profit: acc.profit + (entity.profit || 0)
   }), { sales: 0, prizes: 0, commission: 0, balance: 0, profit: 0 })
 
-  // Determinar si mostrar columnas de participación y total (para comercializadoras y subdistribuidores)
-  const showProfitColumn = rootType === 'admin' || rootType === 'comercializadora' || rootType === 'subdistribuidor'
+  // Determinar si mostrar columnas de participación y total
+  const showProfitColumn = rootType === 'admin' || rootType === 'comercializadora' || rootType === 'subdistribuidor' || rootType === 'agencia'
 
   if (isLoading) {
     return (
