@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -49,6 +49,22 @@ export function DashboardPage() {
     visibleAgencies,
     users: allUsers
   } = useApp()
+
+  // Debug temporal para agencias
+  useEffect(() => {
+    if (currentUser?.userType === 'agencia') {
+      console.log('Debug Agencia Dashboard:', {
+        currentUser,
+        allAgencies: agencies?.map(a => ({
+          id: a.id,
+          userId: a.userId,
+          name: a.name,
+          shareOnProfits: a.shareOnProfits,
+          isCurrentUser: a.id === currentUser.id || a.userId === currentUser.id
+        }))
+      })
+    }
+  }, [currentUser, agencies])
 
   // Fechas de referencia
   const now = new Date()
@@ -352,6 +368,24 @@ export function DashboardPage() {
       const currentAgency = agencies?.find(a => 
         a.id === currentUser.id || a.userId === currentUser.id
       )
+      
+      // Log para debug
+      if (!currentAgency) {
+        console.warn('Agencia no encontrada:', {
+          currentUserId: currentUser.id,
+          availableAgencies: agencies?.map(a => ({ 
+            id: a.id, 
+            userId: a.userId, 
+            name: a.name 
+          }))
+        })
+      } else {
+        console.log('Agencia encontrada:', {
+          agency: currentAgency,
+          shareOnProfits: currentAgency.shareOnProfits
+        })
+      }
+      
       return currentAgency?.shareOnProfits || 0
     }
 
