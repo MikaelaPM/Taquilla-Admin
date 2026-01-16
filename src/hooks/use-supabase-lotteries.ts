@@ -42,6 +42,53 @@ const normalizeTime = (value: string | null | undefined): string => {
   return value.length >= 5 ? value.slice(0, 5) : value;
 };
 
+const matrizEntryToTupleString = (entry: unknown): string | null => {
+  if (entry == null) return null;
+  if (typeof entry === "string") return entry;
+
+  const toParts = (parts: unknown[]): string[] =>
+    parts.slice(0, 5).map((p) => (p == null ? "" : String(p)));
+
+  if (Array.isArray(entry)) {
+    const parts = toParts(entry);
+    return `(${parts.join(",")})`;
+  }
+
+  if (typeof entry === "object") {
+    const obj = entry as Record<string, unknown>;
+
+    const numericKeys = Object.keys(obj)
+      .filter((k) => /^\d+$/.test(k))
+      .sort((a, b) => Number(a) - Number(b));
+    if (numericKeys.length > 0) {
+      const parts = toParts(numericKeys.map((k) => obj[k]));
+      return `(${parts.join(",")})`;
+    }
+
+    const fKeys = ["f1", "f2", "f3", "f4", "f5"].filter((k) => k in obj);
+    if (fKeys.length > 0) {
+      const parts = toParts(fKeys.map((k) => obj[k]));
+      return `(${parts.join(",")})`;
+    }
+
+    const parts = toParts(Object.values(obj));
+    return `(${parts.join(",")})`;
+  }
+
+  return String(entry);
+};
+
+const normalizeMatriz = (value: unknown): string[] | undefined => {
+  if (!value) return undefined;
+  if (!Array.isArray(value)) return undefined;
+
+  const normalized = value
+    .map(matrizEntryToTupleString)
+    .filter((v): v is string => typeof v === "string" && v.length > 0);
+
+  return normalized.length > 0 ? normalized : undefined;
+};
+
 export function useSupabaseLotteries() {
   const [lotteries, setLotteries] = useState<Lottery[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -141,7 +188,7 @@ export function useSupabaseLotteries() {
       const { data: lolaRows, error: lolaError } = await supabase
         .from("lola_lotteries")
         .select(
-          "id, name, opening_time, closing_time, draw_time, is_active, plays_tomorrow, created_at, updated_at, max_to_cancel"
+          "id, name, opening_time, closing_time, draw_time, is_active, plays_tomorrow, created_at, updated_at, max_to_cancel, matriz"
         )
         .order("created_at", { ascending: true });
 
@@ -161,6 +208,7 @@ export function useSupabaseLotteries() {
         playsTomorrow: row.plays_tomorrow ?? false,
         prizes: [],
         createdAt: row.created_at || new Date().toISOString(),
+        matriz: normalizeMatriz(row.matriz),
       }));
 
       // Combinar evitando duplicados por nombre (case-insensitive)

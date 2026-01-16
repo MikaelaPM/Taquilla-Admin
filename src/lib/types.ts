@@ -8,6 +8,10 @@ export interface Lottery {
   playsTomorrow: boolean
   prizes: Prize[]
   createdAt: string
+
+  // Solo para loterías Lola (tabla lola_lotteries)
+  // Cada string suele venir como "(numero,monto,comprados,valor4,valor5)"
+  matriz?: string[]
 }
 
 export interface AppSettings {

@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LotteryDialog } from "@/components/LotteryDialog";
 import { useApp } from "@/contexts/AppContext";
 import { filterLotteries } from "@/lib/filter-utils";
@@ -30,6 +31,16 @@ import {
   Moon,
 } from "@phosphor-icons/react";
 
+const PLACEHOLDER_ANIMAL_IMAGE =
+  "data:image/svg+xml;utf8," +
+  encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+      <rect x="2" y="2" width="124" height="124" rx="10" ry="10" fill="none" stroke="black" stroke-width="4"/>
+      <circle cx="44" cy="46" r="10" fill="none" stroke="black" stroke-width="4"/>
+      <path d="M18 96 L52 62 L74 84 L96 56 L114 96" fill="none" stroke="black" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>`
+  );
+
 export function LotteriesPage() {
   const {
     lotteries,
@@ -48,16 +59,44 @@ export function LotteriesPage() {
     "all" | "active" | "inactive"
   >("all");
   const [isDeleting, setIsDeleting] = useState(false);
+  const [lotteryTab, setLotteryTab] = useState<"mikaela" | "lola">("mikaela");
+
+  const [lolaMatrixDialogOpen, setLolaMatrixDialogOpen] = useState(false);
+  const [selectedLolaLottery, setSelectedLolaLottery] =
+    useState<Lottery | null>(null);
+
+  const parseMatrizItem = (raw: string) => {
+    const cleaned = (raw || "").trim().replace(/^\(/, "").replace(/\)$/, "");
+    const parts = cleaned.split(",").map((p) => p.trim());
+    return {
+      numero: parts[0] ?? "",
+      monto: parts[1] ?? "",
+      comprados: parts[2] ?? "",
+      valor4: parts[3] ?? "",
+      valor5: parts[4] ?? "",
+    };
+  };
+
+  const openLolaMatrix = (lottery: Lottery) => {
+    setSelectedLolaLottery(lottery);
+    setLolaMatrixDialogOpen(true);
+  };
+
+  const isLolaLottery = (lottery: Lottery) => lottery.id.startsWith("lola-");
+
+  const tabLotteries = lotteries.filter((l) =>
+    lotteryTab === "lola" ? isLolaLottery(l) : !isLolaLottery(l)
+  );
 
   // Filtrar y ordenar alfabéticamente por nombre
-  const filteredLotteries = filterLotteries(lotteries, search, {
+  const filteredLotteries = filterLotteries(tabLotteries, search, {
     isActive: statusFilter === "all" ? undefined : statusFilter === "active",
   }).sort((a, b) =>
     a.name.localeCompare(b.name, "es", { sensitivity: "base" })
   );
 
-  const activeCount = lotteries.filter((l) => l.isActive).length;
-  const inactiveCount = lotteries.filter((l) => !l.isActive).length;
+  const activeCount = tabLotteries.filter((l) => l.isActive).length;
+  const inactiveCount = tabLotteries.filter((l) => !l.isActive).length;
 
   const handleSaveLottery = async (lottery: Lottery) => {
     const exists = lotteries.find((l) => l.id === lottery.id);
@@ -124,6 +163,17 @@ export function LotteriesPage() {
         </Button>
       </div>
 
+      {/* Tabs: Mikaela / Lola */}
+      <Tabs value={lotteryTab} onValueChange={(v) => setLotteryTab(v as any)}>
+        <TabsList>
+          <TabsTrigger value="mikaela" className="cursor-pointer">Mikaela</TabsTrigger>
+          <TabsTrigger value="lola" className="cursor-pointer">Lola</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="mikaela" className="mt-0" />
+        <TabsContent value="lola" className="mt-0" />
+      </Tabs>
+
       {/* Filtros */}
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="relative flex-1">
@@ -141,7 +191,7 @@ export function LotteriesPage() {
             size="sm"
             onClick={() => setStatusFilter("all")}
           >
-            Todos ({lotteries.length})
+            Todos ({tabLotteries.length})
           </Button>
           <Button
             variant={statusFilter === "active" ? "default" : "outline"}
@@ -199,126 +249,147 @@ export function LotteriesPage() {
         </Card>
       ) : (
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-          {filteredLotteries.map((lottery) => (
-            <Card
-              key={lottery.id}
-              className="group relative overflow-hidden hover:shadow-lg transition-all duration-300 border-l-4"
-              style={{
-                borderLeftColor: lottery.isActive
-                  ? "rgb(16 185 129)"
-                  : "rgb(156 163 175)",
-              }}
-            >
-              <CardContent className="px-4 py-2">
-                {/* Header de la card */}
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <div
-                      className={`h-8 w-8 rounded-md flex items-center justify-center ${
-                        lottery.isActive
-                          ? "bg-gradient-to-br from-blue-500 to-blue-600"
-                          : "bg-gradient-to-br from-gray-400 to-gray-500"
-                      }`}
-                    >
-                      <Calendar className="h-4 w-4 text-white" weight="fill" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-sm leading-tight">
-                        {lottery.name}
-                      </h3>
-                      <div className="flex items-center gap-1 mt-0.5">
-                        <Badge
-                          variant={lottery.isActive ? "default" : "secondary"}
-                          className={`text-[10px] px-1.5 py-0 h-4 ${
-                            lottery.isActive
-                              ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100"
-                              : ""
-                          }`}
-                        >
-                          {lottery.isActive ? (
-                            <>
-                              <CheckCircle
-                                weight="fill"
-                                className="mr-0.5 h-2.5 w-2.5"
-                              />{" "}
-                              Activo
-                            </>
-                          ) : (
-                            <>
-                              <XCircle
-                                weight="fill"
-                                className="mr-0.5 h-2.5 w-2.5"
-                              />{" "}
-                              Inactivo
-                            </>
-                          )}
-                        </Badge>
-                        {lottery.playsTomorrow && (
+          {filteredLotteries.map((lottery) => {
+            const isLola = isLolaLottery(lottery);
+            return (
+              <Card
+                key={lottery.id}
+                className={`group relative overflow-hidden hover:shadow-lg transition-all duration-300 border-l-4 ${
+                  isLola ? "cursor-pointer" : ""
+                }`}
+                style={{
+                  borderLeftColor: lottery.isActive
+                    ? "rgb(16 185 129)"
+                    : "rgb(156 163 175)",
+                }}
+                onClick={isLola ? () => openLolaMatrix(lottery) : undefined}
+                role={isLola ? "button" : undefined}
+                tabIndex={isLola ? 0 : undefined}
+                onKeyDown={
+                  isLola
+                    ? (e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          openLolaMatrix(lottery);
+                        }
+                      }
+                    : undefined
+                }
+              >
+                <CardContent className="px-4 py-2">
+                  {/* Header de la card */}
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className={`h-8 w-8 rounded-md flex items-center justify-center ${
+                          lottery.isActive
+                            ? "bg-gradient-to-br from-blue-500 to-blue-600"
+                            : "bg-gradient-to-br from-gray-400 to-gray-500"
+                        }`}
+                      >
+                        <Calendar
+                          className="h-4 w-4 text-white"
+                          weight="fill"
+                        />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-sm leading-tight">
+                          {lottery.name}
+                        </h3>
+                        <div className="flex items-center gap-1 mt-0.5">
                           <Badge
-                            variant="outline"
-                            className="text-[10px] px-1.5 py-0 h-4 bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-50"
+                            variant={lottery.isActive ? "default" : "secondary"}
+                            className={`text-[10px] px-1.5 py-0 h-4 ${
+                              lottery.isActive
+                                ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100"
+                                : ""
+                            }`}
                           >
-                            Juega Mañana
+                            {lottery.isActive ? (
+                              <>
+                                <CheckCircle
+                                  weight="fill"
+                                  className="mr-0.5 h-2.5 w-2.5"
+                                />{" "}
+                                Activo
+                              </>
+                            ) : (
+                              <>
+                                <XCircle
+                                  weight="fill"
+                                  className="mr-0.5 h-2.5 w-2.5"
+                                />{" "}
+                                Inactivo
+                              </>
+                            )}
                           </Badge>
-                        )}
+                          {lottery.playsTomorrow && (
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] px-1.5 py-0 h-4 bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-50"
+                            >
+                              Juega Mañana
+                            </Badge>
+                          )}
+                        </div>
                       </div>
                     </div>
+                    {!isLola && (
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                        <button
+                          className="h-7 w-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer"
+                          onClick={() => handleEditLottery(lottery)}
+                          title="Editar"
+                        >
+                          <PencilSimpleLine className="h-4 w-4" />
+                        </button>
+                        <button
+                          className="h-7 w-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+                          onClick={() => handleDeleteClick(lottery)}
+                          title="Eliminar"
+                        >
+                          <X className="h-4 w-4" weight="bold" />
+                        </button>
+                      </div>
+                    )}
                   </div>
-                  {!lottery.id.startsWith("lola-") && (
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                      <button
-                        className="h-7 w-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer"
-                        onClick={() => handleEditLottery(lottery)}
-                        title="Editar"
-                      >
-                        <PencilSimpleLine className="h-4 w-4" />
-                      </button>
-                      <button
-                        className="h-7 w-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
-                        onClick={() => handleDeleteClick(lottery)}
-                        title="Eliminar"
-                      >
-                        <X className="h-4 w-4" weight="bold" />
-                      </button>
+
+                  {/* Info de la card */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <SunHorizon className="h-3.5 w-3.5 shrink-0" />
+                      <span>
+                        Abre:{" "}
+                        <span className="font-medium text-foreground">
+                          {lottery.openingTime}
+                        </span>
+                      </span>
                     </div>
-                  )}
-                </div>
 
-                {/* Info de la card */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <SunHorizon className="h-3.5 w-3.5 shrink-0" />
-                    <span>
-                      Abre:{" "}
-                      <span className="font-medium text-foreground">
-                        {lottery.openingTime}
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Moon className="h-3.5 w-3.5 shrink-0" />
+                      <span>
+                        Cierra:{" "}
+                        <span className="font-medium text-foreground">
+                          {lottery.closingTime}
+                        </span>
                       </span>
-                    </span>
-                  </div>
+                    </div>
 
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Moon className="h-3.5 w-3.5 shrink-0" />
-                    <span>
-                      Cierra:{" "}
-                      <span className="font-medium text-foreground">
-                        {lottery.closingTime}
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Clock className="h-3.5 w-3.5 shrink-0" />
+                      <span>
+                        Jugada:{" "}
+                        <span className="font-medium text-foreground">
+                          {lottery.drawTime}
+                        </span>
                       </span>
-                    </span>
+                    </div>
                   </div>
-
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Clock className="h-3.5 w-3.5 shrink-0" />
-                    <span>
-                      Jugada:{" "}
-                      <span className="font-medium text-foreground">
-                        {lottery.drawTime}
-                      </span>
-                    </span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 
@@ -374,6 +445,97 @@ export function LotteriesPage() {
               disabled={isDeleting}
             >
               {isDeleting ? "Eliminando..." : "Eliminar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Diálogo para visualizar matriz de loterías Lola */}
+      <Dialog
+        open={lolaMatrixDialogOpen}
+        onOpenChange={(open) => {
+          setLolaMatrixDialogOpen(open);
+          if (!open) setSelectedLolaLottery(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-[900px]">
+          <DialogHeader>
+            <DialogTitle>
+              Números
+              {selectedLolaLottery?.name
+                ? ` — ${selectedLolaLottery.name}`
+                : ""}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="max-h-[70vh] overflow-auto rounded-md border p-3">
+            {selectedLolaLottery?.matriz &&
+            selectedLolaLottery.matriz.length > 0 ? (
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {selectedLolaLottery.matriz.map((raw, idx) => {
+                  const row = parseMatrizItem(raw);
+                  return (
+                    <Card key={`${selectedLolaLottery.id}-${idx}`}>
+                      <CardContent className="p-3">
+                        <div className="flex items-start gap-3">
+                          <div className="h-16 w-16 shrink-0 overflow-hidden rounded-md bg-muted">
+                            <img
+                              src={PLACEHOLDER_ANIMAL_IMAGE}
+                              alt={`Animalito ${row.numero}`}
+                              className="h-full w-full object-cover"
+                              loading="lazy"
+                            />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="font-semibold leading-tight">
+                              N° {row.numero}
+                            </div>
+                            <div className="mt-1 space-y-0.5 text-sm text-muted-foreground">
+                              <div>
+                                Monto:{" "}
+                                <span className="font-medium text-foreground">
+                                  {row.monto}
+                                </span>
+                              </div>
+                              <div>
+                                Comprados:{" "}
+                                <span className="font-medium text-foreground">
+                                  {row.comprados}
+                                </span>
+                              </div>
+                              <div>
+                                Valor 4:{" "}
+                                <span className="font-medium text-foreground">
+                                  {row.valor4}
+                                </span>
+                              </div>
+                              <div>
+                                Valor 5:{" "}
+                                <span className="font-medium text-foreground">
+                                  {row.valor5}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="py-10 text-center text-sm text-muted-foreground">
+                Esta lotería Lola no tiene matriz disponible
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setLolaMatrixDialogOpen(false)}
+            >
+              Cerrar
             </Button>
           </DialogFooter>
         </DialogContent>
