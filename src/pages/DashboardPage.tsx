@@ -3,6 +3,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useApp } from '@/contexts/AppContext'
 import { useSalesStats } from '@/hooks/use-sales-stats'
 import { useComercializadoraStats } from '@/hooks/use-comercializadora-stats'
@@ -451,6 +452,14 @@ export function DashboardPage() {
 
   // Loterías activas
   const activeLotteries = lotteries.filter(l => l.isActive)
+
+  const [activeLotteriesTab, setActiveLotteriesTab] = useState<'mikaela' | 'lola'>('mikaela')
+  const isLolaLottery = useCallback((lotteryId: string) => lotteryId.startsWith('lola-'), [])
+  const activeLotteriesForTab = useMemo(() => {
+    return activeLotteries.filter(l =>
+      activeLotteriesTab === 'lola' ? isLolaLottery(l.id) : !isLolaLottery(l.id)
+    )
+  }, [activeLotteries, activeLotteriesTab, isLolaLottery])
 
   // Taquillas activas (filtradas por visibilidad del usuario)
   const activeTaquillas = visibleTaquillas.filter(t => t.isApproved)
@@ -945,8 +954,19 @@ export function DashboardPage() {
               <Target className="h-5 w-5 text-primary" />
               <h3 className="font-semibold">Loterías Activas</h3>
             </div>
+
+            <Tabs value={activeLotteriesTab} onValueChange={(v) => setActiveLotteriesTab(v as any)}>
+              <TabsList>
+                <TabsTrigger value="mikaela" className="cursor-pointer">Mikaela</TabsTrigger>
+                <TabsTrigger value="lola" className="cursor-pointer">Lola</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="mikaela" className="mt-4" />
+              <TabsContent value="lola" className="mt-4" />
+            </Tabs>
+
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {activeLotteries.map((lottery) => (
+              {activeLotteriesForTab.map((lottery) => (
                 <div key={lottery.id} className="flex items-center gap-2 p-2 rounded-lg border bg-card">
                   <CheckCircle className="h-4 w-4 text-emerald-500" weight="fill" />
                   <span className="text-sm font-medium truncate">{lottery.name}</span>
