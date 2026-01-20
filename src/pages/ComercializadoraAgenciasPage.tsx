@@ -95,7 +95,6 @@ export function ComercializadoraAgenciasPage() {
         shareOnSales: agencyData.shareOnSales,
         shareOnProfits: agencyData.shareOnProfits,
         isActive: agencyData.isActive,
-        lotteries: agencyData.lotteries,
         // Incluir password solo si se proporcionó
         ...(agencyData.password ? { password: agencyData.password } : {})
       })
@@ -130,7 +129,6 @@ export function ComercializadoraAgenciasPage() {
       address: agencyData.address || '',
       shareOnSales: agencyData.shareOnSales || 0,
       shareOnProfits: agencyData.shareOnProfits || 0,
-      lotteries: agencyData.lotteries,
       parentId: parentId
     })
 

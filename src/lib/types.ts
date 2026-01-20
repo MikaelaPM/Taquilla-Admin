@@ -114,6 +114,7 @@ export interface Taquilla {
   shareOnSales?: number
   shareOnProfits?: number
   salesLimit?: number // Límite de venta para la taquilla
+  lotteries?: AgencyLotteries | null
 }
 
 export interface Agency {
@@ -128,7 +129,6 @@ export interface Agency {
   shareOnProfits: number
   currentBalance: number
   isActive: boolean
-  lotteries?: AgencyLotteries | null
   createdAt: string
 }
 
@@ -214,7 +214,7 @@ export interface User {
   salesLimit?: number // Límite de venta (solo para taquillas)
   // Relación jerárquica: agencia→comercializadora, taquilla→agencia
   parentId?: string // ID del padre jerárquico
-  lotteries?: AgencyLotteries | null // Acceso a loterías (principalmente para agencias)
+  lotteries?: AgencyLotteries | null // Acceso a loterías (principalmente para taquillas)
 }
 
 export interface ApiKey {
