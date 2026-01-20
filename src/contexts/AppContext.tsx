@@ -356,7 +356,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     shareOnProfits: user.shareOnProfits || 0,
     currentBalance: 0,
     isActive: user.isActive,
-    lotteries: (user as any).lotteries ?? null,
     createdAt: user.createdAt
   }))
 
@@ -373,7 +372,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     createdAt: user.createdAt,
     shareOnSales: user.shareOnSales || 0,
     shareOnProfits: user.shareOnProfits || 0,
-    salesLimit: user.salesLimit || 0
+    salesLimit: user.salesLimit || 0,
+    lotteries: user.lotteries ?? null
   }))
 
   // Derived: comercializadoras from users (todas, sin filtrar)
@@ -494,6 +494,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       shareOnSales: input.shareOnSales || 0,
       shareOnProfits: input.shareOnProfits || 0,
       salesLimit: input.salesLimit || 0,
+      ...(typeof input.lotteries !== 'undefined' ? { lotteries: input.lotteries } : {}),
       parentId: parentId
     })
     return success
@@ -510,6 +511,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       shareOnSales: updates.shareOnSales,
       shareOnProfits: updates.shareOnProfits,
       salesLimit: updates.salesLimit,
+      ...(typeof updates.lotteries !== 'undefined' ? { lotteries: updates.lotteries } : {}),
       // Solo incluir password si se proporcionó
       ...(updates.password ? { password: updates.password } : {})
     })

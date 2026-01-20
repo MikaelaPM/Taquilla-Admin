@@ -6,13 +6,14 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Switch } from '@/components/ui/switch'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Info } from '@phosphor-icons/react'
-import type { Agency, Taquilla } from '@/lib/types'
+import type { Agency, Taquilla, AgencyLotteries } from '@/lib/types'
 
 interface Props {
   open: boolean
   onOpenChange: (v: boolean) => void
-  onSave: (taq: { fullName: string; address: string; telefono: string; email: string; password?: string; agencyId?: string; shareOnSales: number; shareOnProfits: number; salesLimit: number }) => Promise<boolean>
+  onSave: (taq: { fullName: string; address: string; telefono: string; email: string; password?: string; agencyId?: string; shareOnSales: number; shareOnProfits: number; salesLimit: number; lotteries: AgencyLotteries }) => Promise<boolean>
   agencies: Agency[]
   defaultAgencyId?: string
   taquilla?: Taquilla
@@ -29,6 +30,11 @@ export function TaquillaDialog({ open, onOpenChange, onSave, agencies, defaultAg
   const [shareOnProfits, setShareOnProfits] = useState('')
   const [salesLimit, setSalesLimit] = useState('')
   const [isApproved, setIsApproved] = useState(true)
+  const [lotteries, setLotteries] = useState<AgencyLotteries>({
+    lola: false,
+    mikaela: false,
+    pollo_lleno: false,
+  })
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -54,6 +60,11 @@ export function TaquillaDialog({ open, onOpenChange, onSave, agencies, defaultAg
         setShareOnSales((taquilla.shareOnSales || 0).toString())
         setShareOnProfits((taquilla.shareOnProfits || 0).toString())
         setSalesLimit((taquilla.salesLimit || 0).toString())
+        setLotteries({
+          lola: (taquilla as any)?.lotteries?.lola ?? false,
+          mikaela: (taquilla as any)?.lotteries?.mikaela ?? false,
+          pollo_lleno: (taquilla as any)?.lotteries?.pollo_lleno ?? false,
+        })
       } else {
         // Modo creación: limpiar y establecer agencia por defecto
         setFullName('')
@@ -65,6 +76,11 @@ export function TaquillaDialog({ open, onOpenChange, onSave, agencies, defaultAg
         setShareOnSales('')
         setShareOnProfits('')
         setSalesLimit('')
+        setLotteries({
+          lola: false,
+          mikaela: false,
+          pollo_lleno: false,
+        })
       }
       setErrors({})
     }
@@ -149,7 +165,8 @@ export function TaquillaDialog({ open, onOpenChange, onSave, agencies, defaultAg
       agencyId,
       shareOnSales: parseFloat(shareOnSales),
       shareOnProfits: parseFloat(shareOnProfits),
-      salesLimit: parseFloat(salesLimit)
+      salesLimit: parseFloat(salesLimit),
+      lotteries
     })
     setSaving(false)
     if (ok) onOpenChange(false)
@@ -352,6 +369,57 @@ export function TaquillaDialog({ open, onOpenChange, onSave, agencies, defaultAg
             />
             <p className="text-xs text-muted-foreground">Monto máximo de ventas permitido para esta taquilla</p>
             {errors.salesLimit && <p className="text-xs text-destructive">{errors.salesLimit}</p>}
+          </div>
+
+          {/* Loterías */}
+          <div className="space-y-3 pt-2">
+            <div>
+              <Label>Loterías</Label>
+              <p className="text-xs text-muted-foreground">
+                Selecciona a cuáles loterías tendrá acceso esta taquilla
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="taquilla-lottery-lola"
+                  checked={lotteries.lola}
+                  onCheckedChange={(checked) =>
+                    setLotteries((prev) => ({ ...prev, lola: checked === true }))
+                  }
+                />
+                <Label htmlFor="taquilla-lottery-lola" className="font-normal">
+                  Lola
+                </Label>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="taquilla-lottery-mikaela"
+                  checked={lotteries.mikaela}
+                  onCheckedChange={(checked) =>
+                    setLotteries((prev) => ({ ...prev, mikaela: checked === true }))
+                  }
+                />
+                <Label htmlFor="taquilla-lottery-mikaela" className="font-normal">
+                  Mikaela
+                </Label>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="taquilla-lottery-pollo-lleno"
+                  checked={lotteries.pollo_lleno}
+                  onCheckedChange={(checked) =>
+                    setLotteries((prev) => ({ ...prev, pollo_lleno: checked === true }))
+                  }
+                />
+                <Label htmlFor="taquilla-lottery-pollo-lleno" className="font-normal">
+                  Pollo Lleno
+                </Label>
+              </div>
+            </div>
           </div>
         </div>
 
