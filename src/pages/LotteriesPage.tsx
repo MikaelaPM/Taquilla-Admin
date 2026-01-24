@@ -38,7 +38,7 @@ const PLACEHOLDER_ANIMAL_IMAGE =
       <rect x="2" y="2" width="124" height="124" rx="10" ry="10" fill="none" stroke="black" stroke-width="4"/>
       <circle cx="44" cy="46" r="10" fill="none" stroke="black" stroke-width="4"/>
       <path d="M18 96 L52 62 L74 84 L96 56 L114 96" fill="none" stroke="black" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg>`
+    </svg>`,
   );
 
 const normalizeLolaNumero = (numero: string) => {
@@ -77,7 +77,7 @@ const getLolaAnimalImageSrc = (numero: string) => {
   const number = Number.parseInt(numero, 10);
   // const normalized = normalizeLolaNumero(numero);
   // if (!normalized) return PLACEHOLDER_ANIMAL_IMAGE;
-  return `/assets/lola/${number}.png`;
+  return `/assets/lola/${number}.jpg`;
 };
 
 export function LotteriesPage() {
@@ -136,14 +136,14 @@ export function LotteriesPage() {
   const isLolaLottery = (lottery: Lottery) => lottery.id.startsWith("lola-");
 
   const tabLotteries = lotteries.filter((l) =>
-    lotteryTab === "lola" ? isLolaLottery(l) : !isLolaLottery(l)
+    lotteryTab === "lola" ? isLolaLottery(l) : !isLolaLottery(l),
   );
 
   // Filtrar y ordenar alfabéticamente por nombre
   const filteredLotteries = filterLotteries(tabLotteries, search, {
     isActive: statusFilter === "all" ? undefined : statusFilter === "active",
   }).sort((a, b) =>
-    a.name.localeCompare(b.name, "es", { sensitivity: "base" })
+    a.name.localeCompare(b.name, "es", { sensitivity: "base" }),
   );
 
   const activeCount = tabLotteries.filter((l) => l.isActive).length;
@@ -161,7 +161,7 @@ export function LotteriesPage() {
 
     if (!success) {
       throw new Error(
-        "No se pudo guardar la lotería. Revisa la consola para más detalles."
+        "No se pudo guardar la lotería. Revisa la consola para más detalles.",
       );
     }
 
@@ -543,10 +543,10 @@ export function LotteriesPage() {
                     : "";
 
                   const prevMonto = prevNumero
-                    ? lolaMontoByNumero.get(prevNumero) ?? 0
+                    ? (lolaMontoByNumero.get(prevNumero) ?? 0)
                     : 0;
                   const nextMonto = nextNumero
-                    ? lolaMontoByNumero.get(nextNumero) ?? 0
+                    ? (lolaMontoByNumero.get(nextNumero) ?? 0)
                     : 0;
 
                   const multiplicador70 = currentMonto * 70;

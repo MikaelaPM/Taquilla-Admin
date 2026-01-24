@@ -2,16 +2,69 @@ import { useState, useMemo, useCallback, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useApp } from '@/contexts/AppContext'
 import { toast } from 'sonner'
 import { format, startOfWeek, endOfWeek, addDays, addWeeks, subWeeks, isToday, isBefore, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { CaretLeft, CaretRight, Target, CheckCircle, Calendar, Warning, Clock, Trophy, CurrencyDollar, Users, Storefront, SpinnerGap } from '@phosphor-icons/react'
 import { ANIMALS, Lottery, DailyResult } from '@/lib/types'
+
+const PLACEHOLDER_ANIMAL_IMAGE =
+  'data:image/svg+xml;utf8,' +
+  encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+      <rect x="2" y="2" width="124" height="124" rx="10" ry="10" fill="none" stroke="black" stroke-width="4"/>
+      <circle cx="44" cy="46" r="10" fill="none" stroke="black" stroke-width="4"/>
+      <path d="M18 96 L52 62 L74 84 L96 56 L114 96" fill="none" stroke="black" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>`
+  )
+
+const normalizeLolaNumero = (numero: string) => {
+  const cleaned = (numero || '').trim()
+  const digitsOnly = cleaned.replace(/\D+/g, '')
+  if (!digitsOnly) return ''
+  const parsed = Number.parseInt(digitsOnly, 10)
+  if (Number.isNaN(parsed)) return ''
+  const normalized = ((parsed % 100) + 100) % 100
+  return String(normalized).padStart(2, '0')
+}
+
+const parseAmountNumber = (raw: string) => {
+  const s = String(raw ?? '').trim()
+  if (!s) return 0
+
+  const cleaned = s.replace(/[^0-9.,-]/g, '')
+
+  let normalized = cleaned
+  if (cleaned.includes('.') && cleaned.includes(',')) {
+    normalized = cleaned.replace(/\./g, '').replace(/,/g, '.')
+  } else if (cleaned.includes(',')) {
+    normalized = cleaned.replace(/,/g, '.')
+  }
+
+  const n = Number.parseFloat(normalized)
+  return Number.isFinite(n) ? n : 0
+}
+
+const parseCompradosNumber = (raw: string) => {
+  const cleaned = String(raw ?? '').trim().replace(/[^0-9-]/g, '')
+  const n = Number.parseInt(cleaned || '0', 10)
+  return Number.isFinite(n) ? n : 0
+}
+
+const formatAmount = (n: number) =>
+  new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 }).format(n)
+
+const getLolaAnimalImageSrc = (numero: string) => {
+  const number = Number.parseInt(numero, 10)
+  return `/assets/lola/${number}.jpg`
+}
 
 interface WinnerItem {
   id: string
@@ -28,7 +81,9 @@ export function DrawsPage() {
     dailyResults,
     dailyResultsLoading,
     createDailyResult,
+    createDailyResultLola,
     getResultForLotteryAndDate,
+    getResultForLotteryAndDateLola,
     getWinnersForResult
   } = useApp()
 
@@ -43,6 +98,18 @@ export function DrawsPage() {
   const [selectedResult, setSelectedResult] = useState<DailyResult | null>(null)
   const [winners, setWinners] = useState<WinnerItem[]>([])
   const [loadingWinners, setLoadingWinners] = useState(false)
+  const [drawsTab, setDrawsTab] = useState<'mikaela' | 'lola'>('mikaela')
+  const [lolaLoadDialogOpen, setLolaLoadDialogOpen] = useState(false)
+  const [selectedLolaLottery, setSelectedLolaLottery] = useState<Lottery | null>(null)
+  const [selectedLolaDate, setSelectedLolaDate] = useState<string>('')
+  const [selectedLolaNumero, setSelectedLolaNumero] = useState<string>('')
+  const [lolaSort, setLolaSort] = useState<'numero' | 'comprados' | 'total' | 'combined'>('numero')
+  const [lolaTotalFrom, setLolaTotalFrom] = useState<string>('')
+  const [lolaTotalTo, setLolaTotalTo] = useState<string>('')
+  const [lolaConfirmOpen, setLolaConfirmOpen] = useState(false)
+  const [lolaSaving, setLolaSaving] = useState(false)
+
+  const isLolaLottery = useCallback((lottery: Lottery) => lottery.id.startsWith('lola-'), [])
 
   // Loterías activas ordenadas por hora de jugada
   const activeLotteries = useMemo(() => {
@@ -54,6 +121,146 @@ export function DrawsPage() {
         return timeA.localeCompare(timeB)
       })
   }, [lotteries])
+
+  const visibleLotteries = useMemo(() => {
+    return activeLotteries.filter((l) => (drawsTab === 'lola' ? isLolaLottery(l) : !isLolaLottery(l)))
+  }, [activeLotteries, drawsTab, isLolaLottery])
+
+  useEffect(() => {
+    setSelectedCell(null)
+    setSelectedPrizeId('')
+    setConfirmDialogOpen(false)
+    setResultDetailOpen(false)
+    setSelectedResult(null)
+    setWinners([])
+    setLoadingWinners(false)
+
+    setLolaLoadDialogOpen(false)
+    setSelectedLolaLottery(null)
+    setSelectedLolaDate('')
+    setSelectedLolaNumero('')
+    setLolaSort('numero')
+    setLolaTotalFrom('')
+    setLolaTotalTo('')
+    setLolaConfirmOpen(false)
+  }, [drawsTab])
+
+  const parseMatrizItem = (raw: string) => {
+    const cleaned = (raw || '').trim().replace(/^\(/, '').replace(/\)$/, '')
+    const parts = cleaned.split(',').map((p) => p.trim())
+    const numero = normalizeLolaNumero(parts[0] ?? '')
+    return {
+      numero,
+      monto: parts[1] ?? '',
+      comprados: parts[2] ?? '',
+      valor4: parts[3] ?? '',
+      valor5: parts[4] ?? ''
+    }
+  }
+
+  const lolaMontoByNumero = useMemo(() => {
+    const map = new Map<string, number>()
+    const matriz = selectedLolaLottery?.matriz ?? []
+    for (const raw of matriz) {
+      const row = parseMatrizItem(raw)
+      if (!row.numero) continue
+      map.set(row.numero, parseAmountNumber(row.monto))
+    }
+    return map
+  }, [selectedLolaLottery?.id, selectedLolaLottery?.matriz])
+
+  const lolaRows = useMemo(() => {
+    const matriz = selectedLolaLottery?.matriz ?? []
+    return matriz.map((raw, idx) => {
+      const row = parseMatrizItem(raw)
+      const currentNumero = row.numero
+      const currentMonto = parseAmountNumber(row.monto)
+      const compradosNumber = parseCompradosNumber(row.comprados)
+
+      const n = currentNumero ? Number.parseInt(currentNumero, 10) : NaN
+      const prevNumero = Number.isFinite(n) ? String((n + 99) % 100).padStart(2, '0') : ''
+      const nextNumero = Number.isFinite(n) ? String((n + 1) % 100).padStart(2, '0') : ''
+
+      const prevMonto = prevNumero ? lolaMontoByNumero.get(prevNumero) ?? 0 : 0
+      const nextMonto = nextNumero ? lolaMontoByNumero.get(nextNumero) ?? 0 : 0
+
+      // Calculos de multiplicadores
+      const multiplicador70 = currentMonto * 70;
+      const multiplicador5 = prevMonto * 5 + nextMonto * 5;
+      const total = multiplicador70 + multiplicador5;
+
+      return {
+        raw,
+        idx,
+        row,
+        compradosNumber,
+        multiplicador70,
+        multiplicador5,
+        total
+      }
+    })
+  }, [selectedLolaLottery?.id, selectedLolaLottery?.matriz, lolaMontoByNumero])
+
+  const lolaRangeError = useMemo(() => {
+    if (!lolaTotalFrom.trim() || !lolaTotalTo.trim()) return null
+    const from = parseAmountNumber(lolaTotalFrom)
+    const to = parseAmountNumber(lolaTotalTo)
+    if (from > to) return 'El monto “Desde” no puede ser mayor a “Hasta”.'
+    return null
+  }, [lolaTotalFrom, lolaTotalTo])
+
+  const filteredSortedLolaRows = useMemo(() => {
+    let rows = lolaRows
+
+    // Filtro por rango de monto total a pagar (total)
+    const hasFrom = lolaTotalFrom.trim().length > 0
+    const hasTo = lolaTotalTo.trim().length > 0
+    if (hasFrom || hasTo) {
+      const from = hasFrom ? parseAmountNumber(lolaTotalFrom) : 0
+      const to = hasTo ? parseAmountNumber(lolaTotalTo) : Number.POSITIVE_INFINITY
+      if (from <= to) {
+        rows = rows.filter((r) => r.total >= from && r.total <= to)
+      }
+    }
+
+    const sorted = [...rows]
+    sorted.sort((a, b) => {
+      if (lolaSort === 'numero') {
+        const na = a.row.numero ? Number.parseInt(a.row.numero, 10) : Number.NaN
+        const nb = b.row.numero ? Number.parseInt(b.row.numero, 10) : Number.NaN
+        if (Number.isFinite(na) && Number.isFinite(nb)) return na - nb
+        if (Number.isFinite(na)) return -1
+        if (Number.isFinite(nb)) return 1
+        return (a.idx - b.idx)
+      }
+      if (lolaSort === 'comprados') {
+        return (b.compradosNumber - a.compradosNumber) || (b.total - a.total) || (a.idx - b.idx)
+      }
+      if (lolaSort === 'total') {
+        return (b.total - a.total) || (b.compradosNumber - a.compradosNumber) || (a.idx - b.idx)
+      }
+      // combined: combinación de comprados + total
+      return (b.total - a.total) || (b.compradosNumber - a.compradosNumber) || (a.idx - b.idx)
+    })
+    return sorted
+  }, [lolaRows, lolaSort, lolaTotalFrom, lolaTotalTo])
+
+  const selectedLolaTotal = useMemo(() => {
+    if (!selectedLolaNumero) return 0
+    const selected = lolaRows.find((r) => r.row.numero === selectedLolaNumero)
+    return selected?.total ?? 0
+  }, [lolaRows, selectedLolaNumero])
+
+  const openLolaLoadDialog = (lottery: Lottery, dateStr: string) => {
+    setSelectedLolaLottery(lottery)
+    setSelectedLolaDate(dateStr)
+    setSelectedLolaNumero('')
+    setLolaSort('numero')
+    setLolaTotalFrom('')
+    setLolaTotalTo('')
+    setLolaConfirmOpen(false)
+    setLolaLoadDialogOpen(true)
+  }
 
   // Días de la semana actual
   const weekDays = useMemo(() => {
@@ -96,19 +303,27 @@ export function DrawsPage() {
 
   const handleCellClick = (lotteryId: string, date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd')
-    const existingResult = getResultForLotteryAndDate(lotteryId, dateStr)
+
+    const lottery = lotteries.find(l => l.id === lotteryId)
+    if (!lottery) return
+
+    const existingResult = isLolaLottery(lottery)
+      ? getResultForLotteryAndDateLola(lotteryId, dateStr)
+      : getResultForLotteryAndDate(lotteryId, dateStr)
 
     // Si ya hay resultado, no permitir editar
     if (existingResult) {
       return
     }
 
-    const lottery = lotteries.find(l => l.id === lotteryId)
-    if (!lottery) return
-
     // Verificar si la hora de juego ya pasó
     if (!hasDrawTimePassed(lottery, date)) {
       toast.error('La hora de juego de esta lotería aún no ha llegado')
+      return
+    }
+
+    if (isLolaLottery(lottery)) {
+      openLolaLoadDialog(lottery, dateStr)
       return
     }
 
@@ -127,6 +342,14 @@ export function DrawsPage() {
 
   const confirmSaveResult = async () => {
     if (!selectedCell || !selectedPrizeId) return
+
+    const lottery = lotteries.find(l => l.id === selectedCell.lotteryId)
+    const hasValidPrize = !!lottery?.prizes?.some(p => p.id === selectedPrizeId)
+    if (!hasValidPrize) {
+      toast.error('El premio seleccionado no es válido para este sorteo')
+      setConfirmDialogOpen(false)
+      return
+    }
 
     setSavingResult(true)
     try {
@@ -153,6 +376,26 @@ export function DrawsPage() {
 
   const getResultDisplay = (lotteryId: string, date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd')
+    const lottery = lotteries.find(l => l.id === lotteryId)
+    const isLola = !!lottery && isLolaLottery(lottery)
+
+    if (isLola) {
+      const lolaResult = getResultForLotteryAndDateLola(lotteryId, dateStr)
+      if (lolaResult) {
+        return {
+          hasResult: true,
+          number: lolaResult.number,
+          name: 'Lola',
+          hasWinners: (lolaResult.totalToPay || 0) > 0,
+          totalToPay: lolaResult.totalToPay || 0,
+          totalRaised: lolaResult.totalRaised || 0,
+          result: null
+        }
+      }
+
+      return { hasResult: false, number: '', name: '', hasWinners: false, totalToPay: 0, totalRaised: 0, result: null }
+    }
+
     const result = getResultForLotteryAndDate(lotteryId, dateStr)
 
     if (result?.prize) {
@@ -220,6 +463,21 @@ export function DrawsPage() {
         </div>
       </div>
 
+      {/* Tabs: Mikaela / Lola */}
+      <Tabs value={drawsTab} onValueChange={(v) => setDrawsTab(v as any)}>
+        <TabsList>
+          <TabsTrigger value="mikaela" className="cursor-pointer">
+            Mikaela
+          </TabsTrigger>
+          <TabsTrigger value="lola" className="cursor-pointer">
+            Lola
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="mikaela" className="mt-0" />
+        <TabsContent value="lola" className="mt-0" />
+      </Tabs>
+
       {/* Navegación de semanas */}
       <div className="flex items-center justify-between">
         <Button variant="outline" size="sm" onClick={goToPreviousWeek} className="gap-1">
@@ -249,7 +507,7 @@ export function DrawsPage() {
           <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary mb-4"></div>
           <p className="text-muted-foreground">Cargando resultados...</p>
         </div>
-      ) : activeLotteries.length === 0 ? (
+      ) : visibleLotteries.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center justify-center py-12">
             <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-4">
@@ -257,7 +515,9 @@ export function DrawsPage() {
             </div>
             <p className="text-lg font-medium">No hay sorteos activos</p>
             <p className="text-muted-foreground text-sm">
-              Activa sorteos en la sección de Sorteos para poder cargar resultados
+              {drawsTab === 'lola'
+                ? 'No hay sorteos activos de Lola para esta vista'
+                : 'No hay sorteos activos de Mikaela para esta vista'}
             </p>
           </CardContent>
         </Card>
@@ -292,7 +552,7 @@ export function DrawsPage() {
                 </tr>
               </thead>
               <tbody>
-                {activeLotteries.map((lottery) => (
+                {visibleLotteries.map((lottery) => (
                   <tr key={lottery.id} className="border-b hover:bg-muted/30 transition-colors">
                     <td className="p-3 sticky left-0 bg-background z-10 border-r">
                       <div className="flex items-center gap-2">
@@ -307,7 +567,7 @@ export function DrawsPage() {
                     </td>
                     {weekDays.map((day) => {
                       const dateStr = format(day, 'yyyy-MM-dd')
-                      const { hasResult, number, name, hasWinners, result } = getResultDisplay(lottery.id, day)
+                      const { hasResult, number, name, hasWinners, totalToPay, result } = getResultDisplay(lottery.id, day)
                       const isTodayDate = isToday(day)
                       const isPast = isBefore(day, new Date()) && !isTodayDate
                       const isFuture = isBefore(new Date(), day) && !isTodayDate
@@ -325,7 +585,13 @@ export function DrawsPage() {
                         >
                           {hasResult ? (
                             <button
-                              onClick={() => result && handleResultClick(result)}
+                              onClick={() => {
+                                if (isLolaLottery(lottery)) {
+                                  toast.message(`Resultado Lola: ${number} — Total: ${formatAmount(totalToPay || 0)}`)
+                                  return
+                                }
+                                if (result) handleResultClick(result)
+                              }}
                               className="flex flex-col items-center gap-0.5 w-full cursor-pointer hover:scale-105 transition-transform"
                               title="Ver detalles del resultado"
                             >
@@ -376,16 +642,17 @@ export function DrawsPage() {
                                   <SelectValue placeholder="Seleccionar" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  {(lottery.prizes || ANIMALS.map((a, i) => ({
-                                    id: `temp-${i}`,
-                                    animalNumber: a.number,
-                                    animalName: a.name,
-                                    multiplier: 30
-                                  }))).map((prize) => (
-                                    <SelectItem key={prize.id} value={prize.id}>
-                                      {prize.animalNumber} - {prize.animalName}
-                                    </SelectItem>
-                                  ))}
+                                  {(lottery.prizes && lottery.prizes.length > 0)
+                                    ? lottery.prizes.map((prize) => (
+                                        <SelectItem key={prize.id} value={prize.id}>
+                                          {prize.animalNumber} - {prize.animalName}
+                                        </SelectItem>
+                                      ))
+                                    : ANIMALS.map((a, i) => (
+                                        <SelectItem key={`fallback-${i}`} value={`fallback-${i}`}>
+                                          {a.number} - {a.name}
+                                        </SelectItem>
+                                      ))}
                                 </SelectContent>
                               </Select>
                               <div className="flex gap-1">
@@ -401,7 +668,7 @@ export function DrawsPage() {
                                   size="sm"
                                   className="h-6 text-xs flex-1"
                                   onClick={handleSaveResult}
-                                  disabled={!selectedPrizeId}
+                                  disabled={!selectedPrizeId || !(lottery.prizes && lottery.prizes.some(p => p.id === selectedPrizeId))}
                                 >
                                   Guardar
                                 </Button>
@@ -675,6 +942,270 @@ export function DrawsPage() {
           <DialogFooter className="flex-shrink-0">
             <Button variant="outline" onClick={() => setResultDetailOpen(false)}>
               Cerrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Lola: cargar resultado seleccionando animalito */}
+      <Dialog
+        open={lolaLoadDialogOpen}
+        onOpenChange={(open) => {
+          setLolaLoadDialogOpen(open)
+          if (!open) {
+            setSelectedLolaLottery(null)
+            setSelectedLolaDate('')
+            setSelectedLolaNumero('')
+            setLolaConfirmOpen(false)
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[900px]">
+          <DialogHeader>
+            <DialogTitle>
+              Números
+              {selectedLolaLottery?.name
+                ? ` — ${selectedLolaLottery.name}`
+                : ''}
+            </DialogTitle>
+            <DialogDescription>
+              {selectedLolaDate ? `Fecha: ${format(parseISO(selectedLolaDate), 'dd/MM/yyyy', { locale: es })}` : ''}
+            </DialogDescription>
+
+            {/* Filtros (solo para resultados) */}
+            <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div className="w-full sm:max-w-[260px]">
+                <div className="text-xs text-muted-foreground mb-1">Ordenar</div>
+                <Select value={lolaSort} onValueChange={(v) => setLolaSort(v as any)}>
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="Ordenar por" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="numero">Número</SelectItem>
+                    <SelectItem value="comprados">Mayor cantidad de jugados</SelectItem>
+                    <SelectItem value="total">Mayor monto total a pagar</SelectItem>
+                    <SelectItem value="combined">Combinados</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="w-full sm:w-auto">
+                <div className="text-xs text-muted-foreground mb-1">Rango monto total a pagar</div>
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={lolaTotalFrom}
+                    onChange={(e) => {
+                      const next = e.target.value
+                      setLolaTotalFrom(next)
+                      if (!lolaTotalTo.trim()) return
+                      const to = parseAmountNumber(lolaTotalTo)
+                      const from = next.trim() ? parseAmountNumber(next) : 0
+                      if (from > to) setLolaTotalFrom(String(to))
+                    }}
+                    placeholder="Desde"
+                    className="h-9 w-[120px]"
+                    inputMode="decimal"
+                  />
+                  <span className="text-xs text-muted-foreground">—</span>
+                  <Input
+                    value={lolaTotalTo}
+                    onChange={(e) => {
+                      const next = e.target.value
+                      setLolaTotalTo(next)
+                      if (!next.trim()) return
+                      const to = parseAmountNumber(next)
+                      const from = lolaTotalFrom.trim() ? parseAmountNumber(lolaTotalFrom) : 0
+                      if (from > to) setLolaTotalFrom(String(to))
+                    }}
+                    placeholder="Hasta"
+                    className="h-9 w-[120px]"
+                    inputMode="decimal"
+                  />
+                </div>
+                {lolaRangeError && (
+                  <div className="mt-1 text-xs text-destructive">{lolaRangeError}</div>
+                )}
+                {lolaTotalTo.trim() && !lolaRangeError && !lolaTotalFrom.trim() && (
+                  <div className="mt-1 text-xs text-muted-foreground">“Desde” se asume 0.</div>
+                )}
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="max-h-[70vh] overflow-auto rounded-md border p-2">
+            {selectedLolaLottery?.matriz &&
+            selectedLolaLottery.matriz.length > 0 ? (
+              <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
+                {filteredSortedLolaRows.map(({ idx, row, multiplicador70, multiplicador5, total }) => {
+                  const isSelected = !!row.numero && selectedLolaNumero === row.numero
+
+                  return (
+                    <button
+                      key={`${selectedLolaLottery.id}-${idx}`}
+                      type="button"
+                      className="text-left cursor-pointer disabled:cursor-not-allowed"
+                      onClick={() => {
+                        if (!row.numero) return
+                        setSelectedLolaNumero((prev) => (prev === row.numero ? '' : row.numero))
+                      }}
+                      disabled={!row.numero}
+                      aria-pressed={isSelected}
+                    >
+                      <Card
+                        className={`${isSelected ? 'ring-2 ring-primary ring-offset-2' : ''} transition-shadow hover:shadow-md`}
+                      >
+                        <CardContent className="p-2">
+                          <div className="flex items-start gap-2">
+                            <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md bg-muted">
+                              <img
+                                src={getLolaAnimalImageSrc(row.numero)}
+                                alt={`Animalito ${row.numero}`}
+                                className="h-full w-full object-cover"
+                                loading="lazy"
+                                onError={(e) => {
+                                  const img = e.currentTarget
+                                  if (img.dataset.fallbackApplied === '1') return
+                                  img.dataset.fallbackApplied = '1'
+                                  img.src = PLACEHOLDER_ANIMAL_IMAGE
+                                }}
+                              />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="text-sm font-semibold leading-tight">
+                                N° {row.numero}
+                              </div>
+                              <div className="mt-0.5 space-y-0.5 text-xs text-muted-foreground">
+                                <div>
+                                  Monto:{' '}
+                                  <span className="font-medium text-foreground">
+                                    {row.monto}
+                                  </span>
+                                </div>
+                                <div>
+                                  Comprados:{' '}
+                                  <span className="font-medium text-foreground">
+                                    {row.comprados}
+                                  </span>
+                                </div>
+                                <div>
+                                  Multiplicador x70:{' '}
+                                  <span className="font-medium text-foreground">
+                                    {formatAmount(multiplicador70)}
+                                  </span>
+                                </div>
+                                <div>
+                                  Multiplicador x5:{' '}
+                                  <span className="font-medium text-foreground">
+                                    {formatAmount(multiplicador5)}
+                                  </span>
+                                </div>
+                                <div>
+                                  Total:{' '}
+                                  <span className="font-medium text-foreground">
+                                    {formatAmount(total)}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </button>
+                  )
+                })}
+              </div>
+            ) : (
+              <div className="py-10 text-center text-sm text-muted-foreground">
+                Esta lotería Lola no tiene matriz disponible
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="gap-3">
+            <Button
+              variant="outline"
+              onClick={() => setLolaLoadDialogOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => {
+                if (!selectedLolaLottery || !selectedLolaDate || !selectedLolaNumero) return
+                setLolaConfirmOpen(true)
+              }}
+              disabled={!selectedLolaNumero || !!lolaRangeError}
+            >
+              Cargar resultado
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirmación Lola: seleccionar y confirmar el número a salir */}
+      <Dialog open={lolaConfirmOpen} onOpenChange={setLolaConfirmOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Confirmar Resultado</DialogTitle>
+            <DialogDescription>
+              Esta acción no se puede deshacer
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="bg-muted/50 rounded-lg p-4 text-center mb-4">
+              <p className="text-sm text-muted-foreground mb-1">{selectedLolaLottery?.name}</p>
+              <p className="text-sm text-muted-foreground mb-2">
+                {selectedLolaDate
+                  ? format(parseISO(selectedLolaDate), "EEEE d 'de' MMMM", { locale: es })
+                  : ''}
+              </p>
+              <div>
+                <p className="text-3xl font-bold text-primary">
+                  {selectedLolaNumero || '??'}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Número seleccionado
+                </p>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground text-center">
+              ¿Está seguro que desea cargar este resultado?
+            </p>
+          </div>
+          <DialogFooter className="gap-3">
+            <Button
+              variant="outline"
+              onClick={() => setLolaConfirmOpen(false)}
+              disabled={lolaSaving}
+            >
+              Cancelar
+            </Button>
+            <Button
+              disabled={lolaSaving}
+              onClick={async () => {
+                if (!selectedLolaLottery || !selectedLolaDate || !selectedLolaNumero) return
+                setLolaSaving(true)
+                try {
+                  const ok = await createDailyResultLola(
+                    selectedLolaLottery.id,
+                    selectedLolaNumero,
+                    selectedLolaTotal,
+                    selectedLolaDate
+                  )
+                  if (ok) {
+                    toast.success('Resultado Lola guardado exitosamente')
+                    setLolaConfirmOpen(false)
+                    setLolaLoadDialogOpen(false)
+                  } else {
+                    toast.error('Error al guardar el resultado (Lola)')
+                  }
+                } catch (err) {
+                  toast.error('Error al guardar el resultado (Lola)')
+                } finally {
+                  setLolaSaving(false)
+                }
+              }}
+            >
+              {lolaSaving ? 'Guardando...' : 'Confirmar'}
             </Button>
           </DialogFooter>
         </DialogContent>
