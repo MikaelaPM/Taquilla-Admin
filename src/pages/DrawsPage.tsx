@@ -251,6 +251,12 @@ export function DrawsPage() {
     return selected?.total ?? 0
   }, [lolaRows, selectedLolaNumero])
 
+  const selectedLolaRaised = useMemo(() => {
+    if (!selectedLolaNumero) return 0
+    const totalRaised = lolaRows.reduce((sum, r) => sum + parseAmountNumber(r.row.monto), 0)
+    return totalRaised
+  }, [lolaRows, selectedLolaNumero])
+
   const openLolaLoadDialog = (lottery: Lottery, dateStr: string) => {
     setSelectedLolaLottery(lottery)
     setSelectedLolaDate(dateStr)
@@ -1035,85 +1041,91 @@ export function DrawsPage() {
           <div className="max-h-[70vh] overflow-auto rounded-md border p-2">
             {selectedLolaLottery?.matriz &&
             selectedLolaLottery.matriz.length > 0 ? (
-              <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
-                {filteredSortedLolaRows.map(({ idx, row, multiplicador70, multiplicador5, total }) => {
-                  const isSelected = !!row.numero && selectedLolaNumero === row.numero
+              filteredSortedLolaRows.length > 0 ? (
+                <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
+                  {filteredSortedLolaRows.map(({ idx, row, multiplicador70, multiplicador5, total }) => {
+                    const isSelected = !!row.numero && selectedLolaNumero === row.numero
 
-                  return (
-                    <button
-                      key={`${selectedLolaLottery.id}-${idx}`}
-                      type="button"
-                      className="text-left cursor-pointer disabled:cursor-not-allowed"
-                      onClick={() => {
-                        if (!row.numero) return
-                        setSelectedLolaNumero((prev) => (prev === row.numero ? '' : row.numero))
-                      }}
-                      disabled={!row.numero}
-                      aria-pressed={isSelected}
-                    >
-                      <Card
-                        className={`${isSelected ? 'ring-2 ring-primary ring-offset-2' : ''} transition-shadow hover:shadow-md`}
+                    return (
+                      <button
+                        key={`${selectedLolaLottery.id}-${idx}`}
+                        type="button"
+                        className="text-left cursor-pointer disabled:cursor-not-allowed"
+                        onClick={() => {
+                          if (!row.numero) return
+                          setSelectedLolaNumero((prev) => (prev === row.numero ? '' : row.numero))
+                        }}
+                        disabled={!row.numero}
+                        aria-pressed={isSelected}
                       >
-                        <CardContent className="p-2">
-                          <div className="flex items-start gap-2">
-                            <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md bg-muted">
-                              <img
-                                src={getLolaAnimalImageSrc(row.numero)}
-                                alt={`Animalito ${row.numero}`}
-                                className="h-full w-full object-cover"
-                                loading="lazy"
-                                onError={(e) => {
-                                  const img = e.currentTarget
-                                  if (img.dataset.fallbackApplied === '1') return
-                                  img.dataset.fallbackApplied = '1'
-                                  img.src = PLACEHOLDER_ANIMAL_IMAGE
-                                }}
-                              />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="text-sm font-semibold leading-tight">
-                                N° {row.numero}
+                        <Card
+                          className={`${isSelected ? 'ring-2 ring-primary ring-offset-2' : ''} transition-shadow hover:shadow-md`}
+                        >
+                          <CardContent className="p-2">
+                            <div className="flex items-start gap-2">
+                              <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md bg-muted">
+                                <img
+                                  src={getLolaAnimalImageSrc(row.numero)}
+                                  alt={`Animalito ${row.numero}`}
+                                  className="h-full w-full object-cover"
+                                  loading="lazy"
+                                  onError={(e) => {
+                                    const img = e.currentTarget
+                                    if (img.dataset.fallbackApplied === '1') return
+                                    img.dataset.fallbackApplied = '1'
+                                    img.src = PLACEHOLDER_ANIMAL_IMAGE
+                                  }}
+                                />
                               </div>
-                              <div className="mt-0.5 space-y-0.5 text-xs text-muted-foreground">
-                                <div>
-                                  Monto:{' '}
-                                  <span className="font-medium text-foreground">
-                                    {row.monto}
-                                  </span>
+                              <div className="min-w-0 flex-1">
+                                <div className="text-sm font-semibold leading-tight">
+                                  N° {row.numero}
                                 </div>
-                                <div>
-                                  Comprados:{' '}
-                                  <span className="font-medium text-foreground">
-                                    {row.comprados}
-                                  </span>
-                                </div>
-                                <div>
-                                  Multiplicador x70:{' '}
-                                  <span className="font-medium text-foreground">
-                                    {formatAmount(multiplicador70)}
-                                  </span>
-                                </div>
-                                <div>
-                                  Multiplicador x5:{' '}
-                                  <span className="font-medium text-foreground">
-                                    {formatAmount(multiplicador5)}
-                                  </span>
-                                </div>
-                                <div>
-                                  Total:{' '}
-                                  <span className="font-medium text-foreground">
-                                    {formatAmount(total)}
-                                  </span>
+                                <div className="mt-0.5 space-y-0.5 text-xs text-muted-foreground">
+                                  <div>
+                                    Monto:{' '}
+                                    <span className="font-medium text-foreground">
+                                      {row.monto}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    Comprados:{' '}
+                                    <span className="font-medium text-foreground">
+                                      {row.comprados}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    Multiplicador x70:{' '}
+                                    <span className="font-medium text-foreground">
+                                      {formatAmount(multiplicador70)}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    Multiplicador x5:{' '}
+                                    <span className="font-medium text-foreground">
+                                      {formatAmount(multiplicador5)}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    Total:{' '}
+                                    <span className="font-medium text-foreground">
+                                      {formatAmount(total)}
+                                    </span>
+                                  </div>
                                 </div>
                               </div>
                             </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </button>
-                  )
-                })}
-              </div>
+                          </CardContent>
+                        </Card>
+                      </button>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div className="py-10 text-center text-sm text-muted-foreground">
+                  No hay coincidencias para el rango seleccionado.
+                </div>
+              )
             ) : (
               <div className="py-10 text-center text-sm text-muted-foreground">
                 Esta lotería Lola no tiene matriz disponible
@@ -1189,6 +1201,7 @@ export function DrawsPage() {
                     selectedLolaLottery.id,
                     selectedLolaNumero,
                     selectedLolaTotal,
+                    selectedLolaRaised,
                     selectedLolaDate
                   )
                   if (ok) {

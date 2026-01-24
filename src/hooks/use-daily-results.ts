@@ -299,6 +299,7 @@ export function useDailyResults() {
     lotteryId: string,
     number: string,
     totalToPay: number,
+    totalRaised: number,
     resultDate: string
   ): Promise<boolean> => {
     try {
@@ -321,7 +322,7 @@ export function useDailyResults() {
           number,
           total_to_pay: totalToPay,
           result_date: normalizedResultDate,
-          total_raised: 0
+          total_raised: totalRaised - totalToPay
         })
 
       if (insertError) {
