@@ -64,6 +64,16 @@ export interface DailyResult {
   prize?: Prize
 }
 
+export interface DailyResultLola {
+  id: string
+  lotteryId: string
+  number: string
+  createdAt: string
+  resultDate: string
+  totalToPay: number
+  totalRaised: number
+}
+
 export interface Pot {
   name: string
   percentage: number
