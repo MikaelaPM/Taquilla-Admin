@@ -186,6 +186,7 @@ export function DrawsPage() {
 
       // Calculos de multiplicadores
       const multiplicador70 = currentMonto * 70;
+      const multiplicador5Base = currentMonto * 5;
       const multiplicador5 = prevMonto * 5 + nextMonto * 5;
       const total = multiplicador70 + multiplicador5;
 
@@ -195,6 +196,7 @@ export function DrawsPage() {
         row,
         compradosNumber,
         multiplicador70,
+        multiplicador5Base,
         multiplicador5,
         total
       }
@@ -1042,8 +1044,8 @@ export function DrawsPage() {
             {selectedLolaLottery?.matriz &&
             selectedLolaLottery.matriz.length > 0 ? (
               filteredSortedLolaRows.length > 0 ? (
-                <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
-                  {filteredSortedLolaRows.map(({ idx, row, multiplicador70, multiplicador5, total }) => {
+                <div className="grid gap-2 grid-cols-2 sm:grid-cols-3">
+                  {filteredSortedLolaRows.map(({ idx, row, multiplicador70, multiplicador5Base, multiplicador5, total }) => {
                     const isSelected = !!row.numero && selectedLolaNumero === row.numero
 
                     return (
@@ -1101,7 +1103,13 @@ export function DrawsPage() {
                                     </span>
                                   </div>
                                   <div>
-                                    Multiplicador x5:{' '}
+                                    Multiplicador x5 (base):{' '}
+                                    <span className="font-medium text-foreground">
+                                      {formatAmount(multiplicador5Base)}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    Multiplicador x5 (adyacentes):{' '}
                                     <span className="font-medium text-foreground">
                                       {formatAmount(multiplicador5)}
                                     </span>

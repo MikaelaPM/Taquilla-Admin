@@ -526,7 +526,7 @@ export function LotteriesPage() {
           <div className="max-h-[70vh] overflow-auto rounded-md border p-2">
             {selectedLolaLottery?.matriz &&
             selectedLolaLottery.matriz.length > 0 ? (
-              <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
+              <div className="grid gap-2 grid-cols-2 sm:grid-cols-3">
                 {selectedLolaLottery.matriz.map((raw, idx) => {
                   const row = parseMatrizItem(raw);
                   const currentNumero = row.numero;
@@ -550,6 +550,7 @@ export function LotteriesPage() {
                     : 0;
 
                   const multiplicador70 = currentMonto * 70;
+                  const multiplicador5Base = currentMonto * 5;
                   const multiplicador5 = prevMonto * 5 + nextMonto * 5;
                   const total = multiplicador70 + multiplicador5;
 
@@ -595,7 +596,13 @@ export function LotteriesPage() {
                                 </span>
                               </div>
                               <div>
-                                Multiplicador x5:{" "}
+                                Multiplicador x5 (base):{" "}
+                                <span className="font-medium text-foreground">
+                                  {formatAmount(multiplicador5Base)}
+                                </span>
+                              </div>
+                              <div>
+                                Multiplicador x5 (adyacentes):{" "}
                                 <span className="font-medium text-foreground">
                                   {formatAmount(multiplicador5)}
                                 </span>
