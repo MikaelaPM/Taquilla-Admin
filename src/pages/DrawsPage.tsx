@@ -7,8 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useApp } from '@/contexts/AppContext'
+import { useLotteryTypePreference } from '@/contexts/LotteryTypeContext'
 import { toast } from 'sonner'
 import { format, startOfWeek, endOfWeek, addDays, addWeeks, subWeeks, isToday, isBefore, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -87,6 +87,8 @@ export function DrawsPage() {
     getWinnersForResult
   } = useApp()
 
+  const { lotteryType } = useLotteryTypePreference()
+
   const [currentWeekStart, setCurrentWeekStart] = useState(() =>
     startOfWeek(new Date(), { weekStartsOn: 1 })
   )
@@ -98,7 +100,6 @@ export function DrawsPage() {
   const [selectedResult, setSelectedResult] = useState<DailyResult | null>(null)
   const [winners, setWinners] = useState<WinnerItem[]>([])
   const [loadingWinners, setLoadingWinners] = useState(false)
-  const [drawsTab, setDrawsTab] = useState<'mikaela' | 'lola'>('mikaela')
   const [lolaLoadDialogOpen, setLolaLoadDialogOpen] = useState(false)
   const [selectedLolaLottery, setSelectedLolaLottery] = useState<Lottery | null>(null)
   const [selectedLolaDate, setSelectedLolaDate] = useState<string>('')
@@ -123,8 +124,8 @@ export function DrawsPage() {
   }, [lotteries])
 
   const visibleLotteries = useMemo(() => {
-    return activeLotteries.filter((l) => (drawsTab === 'lola' ? isLolaLottery(l) : !isLolaLottery(l)))
-  }, [activeLotteries, drawsTab, isLolaLottery])
+    return activeLotteries.filter((l) => (lotteryType === 'lola' ? isLolaLottery(l) : !isLolaLottery(l)))
+  }, [activeLotteries, lotteryType, isLolaLottery])
 
   useEffect(() => {
     setSelectedCell(null)
@@ -143,7 +144,7 @@ export function DrawsPage() {
     setLolaTotalFrom('')
     setLolaTotalTo('')
     setLolaConfirmOpen(false)
-  }, [drawsTab])
+  }, [lotteryType])
 
   const parseMatrizItem = (raw: string) => {
     const cleaned = (raw || '').trim().replace(/^\(/, '').replace(/\)$/, '')
@@ -471,21 +472,6 @@ export function DrawsPage() {
         </div>
       </div>
 
-      {/* Tabs: Mikaela / Lola */}
-      <Tabs value={drawsTab} onValueChange={(v) => setDrawsTab(v as any)}>
-        <TabsList>
-          <TabsTrigger value="mikaela" className="cursor-pointer">
-            Mikaela
-          </TabsTrigger>
-          <TabsTrigger value="lola" className="cursor-pointer">
-            Lola
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="mikaela" className="mt-0" />
-        <TabsContent value="lola" className="mt-0" />
-      </Tabs>
-
       {/* Navegación de semanas */}
       <div className="flex items-center justify-between">
         <Button variant="outline" size="sm" onClick={goToPreviousWeek} className="gap-1">
@@ -523,7 +509,7 @@ export function DrawsPage() {
             </div>
             <p className="text-lg font-medium">No hay sorteos activos</p>
             <p className="text-muted-foreground text-sm">
-              {drawsTab === 'lola'
+              {lotteryType === 'lola'
                 ? 'No hay sorteos activos de Lola para esta vista'
                 : 'No hay sorteos activos de Mikaela para esta vista'}
             </p>
