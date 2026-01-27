@@ -556,64 +556,61 @@ export function LotteriesPage() {
 
                   return (
                     <Card key={`${selectedLolaLottery.id}-${idx}`}>
-                      <CardContent className="p-2">
-                        <div className="flex items-start gap-2">
-                          <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md bg-muted">
-                            <img
-                              src={getLolaAnimalImageSrc(row.numero)}
-                              alt={`Animalito ${row.numero}`}
-                              className="h-full w-full object-cover"
-                              loading="lazy"
-                              onError={(e) => {
-                                const img = e.currentTarget;
-                                if (img.dataset.fallbackApplied === "1") return;
-                                img.dataset.fallbackApplied = "1";
-                                img.src = PLACEHOLDER_ANIMAL_IMAGE;
-                              }}
-                            />
+                      <CardContent className="relative p-2">
+                        <div className="absolute right-2 top-2 z-10 h-12 w-12 overflow-hidden rounded-md bg-muted shadow">
+                          <img
+                            src={getLolaAnimalImageSrc(row.numero)}
+                            alt={`Animalito ${row.numero}`}
+                            className="h-full w-full object-cover"
+                            loading="lazy"
+                            onError={(e) => {
+                              const img = e.currentTarget;
+                              if (img.dataset.fallbackApplied === "1") return;
+                              img.dataset.fallbackApplied = "1";
+                              img.src = PLACEHOLDER_ANIMAL_IMAGE;
+                            }}
+                          />
+                        </div>
+
+                        <div className="text-sm font-semibold leading-tight">
+                          N° {row.numero}
+                        </div>
+                        <div className="mt-0.5 space-y-0.5 text-xs text-muted-foreground">
+                          <div>
+                            Monto:{" "}
+                            <span className="font-medium text-foreground">
+                              {row.monto}
+                            </span>
                           </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="text-sm font-semibold leading-tight">
-                              N° {row.numero}
-                            </div>
-                            <div className="mt-0.5 space-y-0.5 text-xs text-muted-foreground">
-                              <div>
-                                Monto:{" "}
-                                <span className="font-medium text-foreground">
-                                  {row.monto}
-                                </span>
-                              </div>
-                              <div>
-                                Comprados:{" "}
-                                <span className="font-medium text-foreground">
-                                  {row.comprados}
-                                </span>
-                              </div>
-                              <div>
-                                Multiplicador x70:{" "}
-                                <span className="font-medium text-foreground">
-                                  {formatAmount(multiplicador70)}
-                                </span>
-                              </div>
-                              <div>
-                                Multiplicador x5 (base):{" "}
-                                <span className="font-medium text-foreground">
-                                  {formatAmount(multiplicador5Base)}
-                                </span>
-                              </div>
-                              <div>
-                                Multiplicador x5 (adyacentes):{" "}
-                                <span className="font-medium text-foreground">
-                                  {formatAmount(multiplicador5)}
-                                </span>
-                              </div>
-                              <div>
-                                Total:{" "}
-                                <span className="font-medium text-foreground">
-                                  {formatAmount(total)}
-                                </span>
-                              </div>
-                            </div>
+                          <div>
+                            Comprados:{" "}
+                            <span className="font-medium text-foreground">
+                              {row.comprados}
+                            </span>
+                          </div>
+                          <div>
+                            Multiplicador x70:{" "}
+                            <span className="font-medium text-foreground">
+                              {formatAmount(multiplicador70)}
+                            </span>
+                          </div>
+                          <div>
+                            Multiplicador x5 (base):{" "}
+                            <span className="font-medium text-foreground">
+                              {formatAmount(multiplicador5Base)}
+                            </span>
+                          </div>
+                          <div>
+                            Multiplicador x5 (adyacentes):{" "}
+                            <span className="font-medium text-foreground">
+                              {formatAmount(multiplicador5)}
+                            </span>
+                          </div>
+                          <div>
+                            Total:{" "}
+                            <span className="font-medium text-foreground">
+                              {formatAmount(total)}
+                            </span>
                           </div>
                         </div>
                       </CardContent>
