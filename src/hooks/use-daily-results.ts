@@ -35,6 +35,15 @@ export function useDailyResults() {
     return `lola-${n}`
   }
 
+  const normalizeLolaNumber = (value: string) => {
+    const cleaned = String(value ?? '').trim().replace(/\D+/g, '')
+    if (!cleaned) return ''
+    const parsed = Number.parseInt(cleaned, 10)
+    if (Number.isNaN(parsed)) return ''
+    const normalized = ((parsed % 100) + 100) % 100
+    return String(normalized).padStart(2, '0')
+  }
+
   const loadDailyResults = useCallback(async (startDate?: string, endDate?: string) => {
     try {
       setLoadingClassic(true)
@@ -315,11 +324,78 @@ export function useDailyResults() {
         return false
       }
 
+      const normalizedNumber = normalizeLolaNumber(number)
+      if (!normalizedNumber) {
+        console.error('Invalid Lola result number:', number)
+        return false
+      }
+
+      const dateObj = parseISO(normalizedResultDate)
+      const dayStart = startOfDay(dateObj).toISOString()
+      const dayEnd = endOfDay(dateObj).toISOString()
+
+      const n = Number.parseInt(normalizedNumber, 10)
+      const prevNumber = Number.isFinite(n) && n > 0 ? String(n - 1).padStart(2, '0') : ''
+      const nextNumber = Number.isFinite(n) && n < 99 ? String(n + 1).padStart(2, '0') : ''
+
+      const { data: lolaItems, error: lolaItemsError } = await supabase
+        .from('bets_item_lola_lottery')
+        .select('id, number, amount, status')
+        .eq('lola_lottery_id', dbLotteryId)
+        .gte('created_at', dayStart)
+        .lte('created_at', dayEnd)
+        .eq('status', 'active')
+
+        console.log(lolaItems);
+        
+
+      if (lolaItemsError) {
+        console.error('Error fetching lola items:', lolaItemsError)
+        return false
+      }
+
+      const winnerUpdates = (lolaItems || [])
+        .map((item: any) => {
+          const itemNumber = normalizeLolaNumber(String(item.number ?? ''))
+          if (!itemNumber) return null
+
+          const isExact = itemNumber === normalizedNumber
+          const isAdjacent = itemNumber === prevNumber || itemNumber === nextNumber
+          if (!isExact && !isAdjacent) return null
+
+          const multiplier = isExact ? 70 : 5
+          const prize = (Number(item.amount) || 0) * multiplier
+
+          return {
+            id: item.id,
+            status: 'winner',
+            prize,
+            description_prize: multiplier === 70 ? 'x70' : 'x5'
+          }
+        })
+        .filter(Boolean) as Array<{ id: string; status: string; prize: number; description_prize: string }>
+
+      if (winnerUpdates.length > 0) {
+
+        const winnerIds = winnerUpdates.map(w => w.id)
+        const winnerPrizes = winnerUpdates.map(w => w.prize)
+        const winnerDescriptions = winnerUpdates.map(w => w.description_prize)
+
+        const { error: updateError } = await supabase.rpc("mark_lola_winners", {
+          p_ids: winnerIds,
+          p_prizes: winnerPrizes,
+          p_descriptions: winnerDescriptions,
+        });
+        if (updateError) {
+          console.error('Error updating lola winner status:', updateError)
+        }
+      }
+
       const { error: insertError } = await supabase
         .from('daily_results_lola')
         .insert({
           lottery_id: dbLotteryId,
-          number,
+          number: normalizedNumber,
           total_to_pay: totalToPay,
           result_date: normalizedResultDate,
           total_raised: totalRaised - totalToPay
