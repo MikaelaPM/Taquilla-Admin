@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Calendar } from '@/components/ui/calendar'
 import { useApp } from '@/contexts/AppContext'
+import { useLotteryTypePreference } from '@/contexts/LotteryTypeContext'
 import { formatCurrency } from '@/lib/pot-utils'
 import { format, startOfDay, endOfDay, startOfWeek, startOfMonth } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -34,6 +35,13 @@ import { Winner } from '@/hooks/use-winners'
 
 export function WinnersPage() {
   const { winners, winnersLoading, loadWinners, lotteries } = useApp()
+  const { lotteryType } = useLotteryTypePreference()
+
+  const isLolaLotteryId = (lotteryId: string) => lotteryId.startsWith('lola-')
+  const activeLotteriesForType = useMemo(() => {
+    const active = lotteries.filter(l => l.isActive)
+    return active.filter(l => (lotteryType === 'lola' ? isLolaLotteryId(l.id) : !isLolaLotteryId(l.id)))
+  }, [lotteries, lotteryType])
 
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'paid'>('all')
@@ -49,6 +57,13 @@ export function WinnersPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 12
 
+  // Si cambia el tipo (header), resetear la lotería seleccionada si no aplica
+  useEffect(() => {
+    if (lotteryFilter === 'all') return
+    const existsInType = activeLotteriesForType.some(l => l.id === lotteryFilter)
+    if (!existsInType) setLotteryFilter('all')
+  }, [lotteryFilter, activeLotteriesForType])
+
   // Calcular fechas de filtros
   const now = new Date()
   const todayStart = startOfDay(now)
@@ -58,6 +73,13 @@ export function WinnersPage() {
   // Filtrar ganadores
   const filteredWinners = useMemo(() => {
     return winners.filter(winner => {
+      // Filtro por tipo de lotería (Mikaela vs Lola)
+      const winnerLotteryId = winner.lotteryId || ''
+      const matchesType = lotteryType === 'lola'
+        ? winnerLotteryId.startsWith('lola-')
+        : !winnerLotteryId.startsWith('lola-')
+      if (!matchesType) return false
+
       // Búsqueda
       const matchesSearch = search === '' ||
         winner.lotteryName.toLowerCase().includes(search.toLowerCase()) ||
@@ -88,7 +110,7 @@ export function WinnersPage() {
 
       return matchesSearch && matchesLottery && matchesPeriod && matchesStatus
     }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-  }, [winners, search, lotteryFilter, periodFilter, statusFilter, todayStart, weekStart, monthStart, customDateRange])
+  }, [winners, search, lotteryFilter, periodFilter, statusFilter, todayStart, weekStart, monthStart, customDateRange, lotteryType])
 
   // Estadísticas
   const stats = useMemo(() => {
@@ -271,7 +293,7 @@ export function WinnersPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todas las loterías</SelectItem>
-              {lotteries.filter(l => l.isActive).map((lottery) => (
+              {activeLotteriesForType.map((lottery) => (
                 <SelectItem key={lottery.id} value={lottery.id}>
                   {lottery.name}
                 </SelectItem>

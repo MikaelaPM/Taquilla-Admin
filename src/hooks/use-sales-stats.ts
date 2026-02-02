@@ -32,6 +32,8 @@ export interface SalesStats {
 export interface UseSalesStatsOptions {
   // IDs de taquillas visibles (si es undefined o vacío, no filtra)
   visibleTaquillaIds?: string[]
+  // Permite deshabilitar el hook sin cambiar el API existente
+  enabled?: boolean
 }
 
 export function useSalesStats(options?: UseSalesStatsOptions) {
@@ -51,6 +53,25 @@ export function useSalesStats(options?: UseSalesStatsOptions) {
   const [error, setError] = useState<string | null>(null)
 
   const loadStats = useCallback(async () => {
+    const enabled = options?.enabled ?? true
+    if (!enabled) {
+      setStats({
+        todaySales: 0,
+        todayBetsCount: 0,
+        todayTaquillaCommissions: 0,
+        weekSales: 0,
+        weekBetsCount: 0,
+        weekTaquillaCommissions: 0,
+        monthSales: 0,
+        monthBetsCount: 0,
+        monthTaquillaCommissions: 0,
+        salesByTaquilla: []
+      })
+      setLoading(false)
+      setError(null)
+      return
+    }
+
     try {
       setLoading(true)
       setError(null)
@@ -272,7 +293,7 @@ export function useSalesStats(options?: UseSalesStatsOptions) {
     } finally {
       setLoading(false)
     }
-  }, [options?.visibleTaquillaIds])
+  }, [options?.enabled, options?.visibleTaquillaIds])
 
   useEffect(() => {
     loadStats()

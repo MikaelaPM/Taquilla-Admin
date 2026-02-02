@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Progress } from '@/components/ui/progress'
 import { useApp } from '@/contexts/AppContext'
+import { useLotteryTypePreference } from '@/contexts/LotteryTypeContext'
 import { useBetsStats } from '@/hooks/use-bets-stats'
 import { useComercializadoraStats } from '@/hooks/use-comercializadora-stats'
 import { useAgencyStats } from '@/hooks/use-agency-stats'
@@ -50,7 +51,14 @@ export function ReportsPage() {
     agencies,
     visibleAgencies
   } = useApp()
+  const { lotteryType } = useLotteryTypePreference()
   const { topMostPlayed, topHighestAmount, loading: betsStatsLoading, loadBetsStats } = useBetsStats({ visibleTaquillaIds })
+
+  const isLolaLotteryId = (lotteryId: string) => lotteryId.startsWith('lola-')
+  const activeLotteriesForType = useMemo(() => {
+    const active = lotteries.filter(l => l.isActive)
+    return active.filter(l => (lotteryType === 'lola' ? isLolaLotteryId(l.id) : !isLolaLotteryId(l.id)))
+  }, [lotteries, lotteryType])
 
   // Determinar tipo de usuario
   const isAdmin = currentUser?.userType === 'admin' || !currentUser?.userType
@@ -95,6 +103,13 @@ export function ReportsPage() {
   const [periodFilter, setPeriodFilter] = useState<'today' | 'week' | 'month' | 'custom'>('month')
   const [selectedLottery, setSelectedLottery] = useState<string>('all')
 
+  // Si cambia el tipo (header), resetear la lotería seleccionada si no aplica
+  useEffect(() => {
+    if (selectedLottery === 'all') return
+    const existsInType = activeLotteriesForType.some(l => l.id === selectedLottery)
+    if (!existsInType) setSelectedLottery('all')
+  }, [selectedLottery, activeLotteriesForType])
+
   // Calcular fechas de filtros
   const now = new Date()
   const todayStart = startOfDay(now)
@@ -112,6 +127,12 @@ export function ReportsPage() {
     return dailyResults.filter(result => {
       const resultDate = parseISO(result.resultDate)
 
+      // Filtro por tipo de lotería (Mikaela vs Lola)
+      const matchesType = lotteryType === 'lola'
+        ? result.lotteryId.startsWith('lola-')
+        : !result.lotteryId.startsWith('lola-')
+      if (!matchesType) return false
+
       // Filtro por lotería
       if (selectedLottery !== 'all' && result.lotteryId !== selectedLottery) {
         return false
@@ -122,12 +143,18 @@ export function ReportsPage() {
       const toDate = endOfDay(dateRange.to)
       return resultDate >= fromDate && resultDate <= toDate
     })
-  }, [dailyResults, selectedLottery, dateRange])
+  }, [dailyResults, selectedLottery, dateRange, lotteryType])
 
   // Filtrar ganadores por período usando dateRange
   const filteredWinners = useMemo(() => {
     return winners.filter(winner => {
       const winnerDate = new Date(winner.createdAt)
+
+      // Filtro por tipo de lotería (Mikaela vs Lola)
+      const matchesType = lotteryType === 'lola'
+        ? (winner.lotteryId || '').startsWith('lola-')
+        : !(winner.lotteryId || '').startsWith('lola-')
+      if (!matchesType) return false
 
       // Filtro por lotería
       if (selectedLottery !== 'all' && winner.lotteryId !== selectedLottery) {
@@ -139,7 +166,7 @@ export function ReportsPage() {
       const toDate = endOfDay(dateRange.to)
       return winnerDate >= fromDate && winnerDate <= toDate
     })
-  }, [winners, selectedLottery, dateRange])
+  }, [winners, selectedLottery, dateRange, lotteryType])
 
   // Calcular totales desde los hooks de comercializadora/agencia/taquilla según el tipo de usuario
   // Obtener el porcentaje de participación en utilidades del usuario logueado
@@ -391,10 +418,11 @@ export function ReportsPage() {
     loadBetsStats({
       startDate: startOfDay(dateRange.from).toISOString(),
       endDate: endOfDay(dateRange.to).toISOString(),
-      lotteryId: selectedLottery
+      lotteryId: selectedLottery,
+      lotteryType
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dateRange, selectedLottery])
+  }, [dateRange, selectedLottery, lotteryType])
 
   const getPeriodLabel = () => {
     switch (periodFilter) {
@@ -468,7 +496,8 @@ export function ReportsPage() {
     loadBetsStats({
       startDate: startOfDay(dateRange.from).toISOString(),
       endDate: endOfDay(dateRange.to).toISOString(),
-      lotteryId: selectedLottery
+      lotteryId: selectedLottery,
+      lotteryType
     })
   }
 
@@ -503,7 +532,7 @@ export function ReportsPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todas las loterías</SelectItem>
-              {lotteries.filter(l => l.isActive).map((lottery) => (
+              {activeLotteriesForType.map((lottery) => (
                 <SelectItem key={lottery.id} value={lottery.id}>
                   {lottery.name}
                 </SelectItem>

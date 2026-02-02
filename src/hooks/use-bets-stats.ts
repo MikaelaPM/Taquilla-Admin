@@ -41,6 +41,7 @@ export function useBetsStats(options?: UseBetsStatsOptions) {
     startDate?: string
     endDate?: string
     lotteryId?: string
+    lotteryType?: 'mikaela' | 'lola'
   }) => {
     setLoading(true)
     setError(null)
@@ -133,10 +134,20 @@ export function useBetsStats(options?: UseBetsStatsOptions) {
         return
       }
 
-      // Filtrar por lotería si se especificó
+      // Filtrar por tipo de lotería (Mikaela vs Lola) si se especificó
       let filteredBetsItems = betsItems
+      if (queryOptions?.lotteryType) {
+        filteredBetsItems = filteredBetsItems.filter(item => {
+          const prizeInfo = prizesMap.get(item.prize_id)
+          if (!prizeInfo?.lotteryId) return false
+          const isLola = prizeInfo.lotteryId.startsWith('lola-')
+          return queryOptions.lotteryType === 'lola' ? isLola : !isLola
+        })
+      }
+
+      // Filtrar por lotería específica si se especificó
       if (queryOptions?.lotteryId && queryOptions.lotteryId !== 'all') {
-        filteredBetsItems = betsItems.filter(item => {
+        filteredBetsItems = filteredBetsItems.filter(item => {
           const prizeInfo = prizesMap.get(item.prize_id)
           return prizeInfo?.lotteryId === queryOptions.lotteryId
         })

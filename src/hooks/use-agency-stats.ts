@@ -44,6 +44,9 @@ export interface UseAgencyStatsOptions {
   // Rango de fechas personalizado (opcional)
   dateFrom?: Date
   dateTo?: Date
+
+  // Permite deshabilitar el hook (por ejemplo, cuando lotteryType = 'lola')
+  enabled?: boolean
 }
 
 export function useAgencyStats(options: UseAgencyStatsOptions) {
@@ -74,7 +77,14 @@ export function useAgencyStats(options: UseAgencyStatsOptions) {
   optionsRef.current = options
 
   const loadStats = useCallback(async () => {
-    const { agencies, taquillas, dateFrom, dateTo } = optionsRef.current
+    const { enabled = true, agencies, taquillas, dateFrom, dateTo } = optionsRef.current
+
+    if (!enabled) {
+      setStats([])
+      setLoading(false)
+      setError(null)
+      return
+    }
 
     if (!agencies || agencies.length === 0) {
       setStats([])
@@ -339,7 +349,7 @@ export function useAgencyStats(options: UseAgencyStatsOptions) {
     if (agenciesKey) {
       loadStats()
     }
-  }, [agenciesKey, taquillasKey, dateRangeKey, loadStats])
+  }, [agenciesKey, taquillasKey, dateRangeKey, options.enabled, loadStats])
 
   return {
     stats,
