@@ -582,6 +582,78 @@ export function useDailyResults() {
     }
   }, [])
 
+  /**
+   * Obtiene los ganadores de un resultado Lola específico
+   * Busca en bets_item_lola_lottery los items con status 'winner' o 'paid'
+   * Filtra por lotería y día del resultado
+   */
+  const getWinnersForResultLola = useCallback(async (
+    lolaLotteryId: string,
+    resultDate: string
+  ): Promise<Array<{
+    id: string
+    amount: number
+    potentialWin: number
+    taquillaId: string
+    taquillaName: string
+    createdAt: string
+  }>> => {
+    try {
+      const dbLotteryId = toLolaDbLotteryId(lolaLotteryId)
+      if (!dbLotteryId) return []
+
+      const normalizedResultDate = getDatePart(resultDate)
+      if (!normalizedResultDate) return []
+
+      const dateObj = parseISO(normalizedResultDate)
+      const dayStart = startOfDay(dateObj).toISOString()
+      const dayEnd = endOfDay(dateObj).toISOString()
+
+      const { data: winningItems, error: itemsError } = await supabase
+        .from('bets_item_lola_lottery')
+        .select('id, user_id, amount, prize, created_at')
+        .eq('lola_lottery_id', dbLotteryId)
+        .in('status', ['winner', 'paid'])
+        .gte('created_at', dayStart)
+        .lte('created_at', dayEnd)
+
+      if (itemsError || !winningItems || winningItems.length === 0) {
+        return []
+      }
+
+      const userIds = [...new Set(winningItems.map(w => w.user_id).filter(Boolean))]
+
+      let usersMap = new Map<string, string>()
+      if (userIds.length > 0) {
+        const { data: users } = await supabase
+          .from('users')
+          .select('id, name')
+          .in('id', userIds)
+
+        if (users) {
+          usersMap = new Map(users.map(u => [u.id, u.name]))
+        }
+      }
+
+      return winningItems.map(item => {
+        const taquillaId = item.user_id || ''
+        const taquillaName = usersMap.get(taquillaId) || 'Desconocida'
+
+        return {
+          id: item.id,
+          amount: Number(item.amount) || 0,
+          potentialWin: Number(item.prize) || 0,
+          taquillaId,
+          taquillaName,
+          createdAt: item.created_at || ''
+        }
+      })
+    } catch (err) {
+      console.error('Error in getWinnersForResultLola:', err)
+      return []
+    }
+  }, [])
+
   useEffect(() => {
     Promise.all([
       loadDailyResults(),
@@ -605,6 +677,7 @@ export function useDailyResults() {
     getResultForLotteryAndDate,
     getResultForLotteryAndDateLola,
     getResultsForWeek,
-    getWinnersForResult
+    getWinnersForResult,
+    getWinnersForResultLola
   }
 }

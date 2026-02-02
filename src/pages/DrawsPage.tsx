@@ -84,7 +84,8 @@ export function DrawsPage() {
     createDailyResultLola,
     getResultForLotteryAndDate,
     getResultForLotteryAndDateLola,
-    getWinnersForResult
+    getWinnersForResult,
+    getWinnersForResultLola
   } = useApp()
 
   const { lotteryType } = useLotteryTypePreference()
@@ -102,6 +103,8 @@ export function DrawsPage() {
   const [selectedLolaResultDetail, setSelectedLolaResultDetail] = useState<DailyResultLola | null>(null)
   const [winners, setWinners] = useState<WinnerItem[]>([])
   const [loadingWinners, setLoadingWinners] = useState(false)
+  const [lolaWinners, setLolaWinners] = useState<WinnerItem[]>([])
+  const [lolaLoadingWinners, setLolaLoadingWinners] = useState(false)
   const [lolaLoadDialogOpen, setLolaLoadDialogOpen] = useState(false)
   const [selectedLolaLottery, setSelectedLolaLottery] = useState<Lottery | null>(null)
   const [selectedLolaDate, setSelectedLolaDate] = useState<string>('')
@@ -137,6 +140,8 @@ export function DrawsPage() {
     setSelectedResult(null)
     setWinners([])
     setLoadingWinners(false)
+    setLolaWinners([])
+    setLolaLoadingWinners(false)
 
     setLolaResultDetailOpen(false)
     setSelectedLolaResultDetail(null)
@@ -151,10 +156,23 @@ export function DrawsPage() {
     setLolaConfirmOpen(false)
   }, [lotteryType])
 
-  const openLolaResultDetail = useCallback((result: DailyResultLola) => {
+  const handleLolaResultClick = useCallback(async (result: DailyResultLola) => {
     setSelectedLolaResultDetail(result)
+    setLolaWinners([])
     setLolaResultDetailOpen(true)
-  }, [])
+
+    if ((result.totalToPay || 0) > 0) {
+      setLolaLoadingWinners(true)
+      try {
+        const winnersData = await getWinnersForResultLola(result.lotteryId, result.resultDate)
+        setLolaWinners(winnersData)
+      } catch (err) {
+        console.error('Error loading lola winners:', err)
+      } finally {
+        setLolaLoadingWinners(false)
+      }
+    }
+  }, [getWinnersForResultLola])
 
   const parseMatrizItem = (raw: string) => {
     const cleaned = (raw || '').trim().replace(/^\(/, '').replace(/\)$/, '')
@@ -595,7 +613,7 @@ export function DrawsPage() {
                               onClick={() => {
                                 if (isLolaLottery(lottery)) {
                                   const lolaResult = getResultForLotteryAndDateLola(lottery.id, dateStr)
-                                  if (lolaResult) openLolaResultDetail(lolaResult)
+                                  if (lolaResult) handleLolaResultClick(lolaResult)
                                   return
                                 }
                                 if (result) handleResultClick(result)
@@ -1076,6 +1094,64 @@ export function DrawsPage() {
                   </p>
                 </div>
               </div>
+
+              {/* Estado de ganadores y tabla */}
+              {(selectedLolaResultDetail?.totalToPay || 0) > 0 ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-blue-700">
+                    <Trophy className="h-5 w-5 text-amber-500" weight="fill" />
+                    <span className="font-medium">Jugadas Ganadoras ({lolaWinners.length})</span>
+                  </div>
+
+                  {lolaLoadingWinners ? (
+                    <div className="flex items-center justify-center py-6">
+                      <SpinnerGap className="h-6 w-6 animate-spin text-blue-500" />
+                      <span className="ml-2 text-sm text-muted-foreground">Cargando ganadores...</span>
+                    </div>
+                  ) : lolaWinners.length > 0 ? (
+                    <ScrollArea className="h-[200px] rounded-lg border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="text-xs">Taquilla</TableHead>
+                            <TableHead className="text-xs text-right">Apostado</TableHead>
+                            <TableHead className="text-xs text-right">Premio</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {lolaWinners.map((winner) => (
+                            <TableRow key={winner.id}>
+                              <TableCell className="py-2">
+                                <div className="flex items-center gap-2">
+                                  <Storefront className="h-4 w-4 text-muted-foreground" />
+                                  <span className="text-sm font-medium">{winner.taquillaName}</span>
+                                </div>
+                              </TableCell>
+                              <TableCell className="py-2 text-right text-sm tabular-nums">
+                                {formatCurrency(winner.amount)}
+                              </TableCell>
+                              <TableCell className="py-2 text-right text-sm tabular-nums font-semibold text-emerald-600">
+                                {formatCurrency(winner.potentialWin)}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </ScrollArea>
+                  ) : (
+                    <div className="text-center py-4 text-sm text-muted-foreground">
+                      No se encontraron detalles de ganadores
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="rounded-lg p-4 text-center bg-gray-50 border border-gray-200">
+                  <div className="flex items-center justify-center gap-2">
+                    <CheckCircle className="h-5 w-5 text-gray-400" weight="fill" />
+                    <span className="font-medium text-gray-600">Sin ganadores</span>
+                  </div>
+                </div>
+              )}
 
               {/* Info adicional */}
               <div className="text-xs text-muted-foreground text-center">
