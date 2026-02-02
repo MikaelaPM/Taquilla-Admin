@@ -109,14 +109,14 @@ export function ComercializadorasTab({
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                    <h2 className="text-2xl font-bold tracking-tight">Subdistribuidores</h2>
+                    <h2 className="text-2xl font-bold tracking-tight">Comercializadoras</h2>
                     <p className="text-muted-foreground">
-                        Gestiona los subdistribuidores que coordinan agencias
+                        Gestiona las comercializadoras que coordinan subdistribuidores
                     </p>
                 </div>
                 <Button onClick={handleCreate} className="gap-2 cursor-pointer">
                     <Plus weight="bold" />
-                    Nuevo Subdistribuidor
+                    Nueva Comercializadora
                 </Button>
             </div>
 

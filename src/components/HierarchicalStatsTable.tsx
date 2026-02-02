@@ -41,6 +41,7 @@ interface HierarchicalStatsTableProps {
   allUsers: any[] // Todos los usuarios del sistema
   isLoading?: boolean
   currentUserType?: string // Tipo del usuario actual
+  lotteryType?: 'lola' | 'mikaela'
 }
 
 // Componente de fila expandible
@@ -51,12 +52,14 @@ interface ExpandableRowProps {
   dateTo: Date
   allUsers: any[]
   showProfitColumn: boolean
+  lotteryType?: 'lola' | 'mikaela'
 }
 
-function ExpandableRow({ entity, level, dateFrom, dateTo, allUsers, showProfitColumn }: ExpandableRowProps) {
+function ExpandableRow({ entity, level, dateFrom, dateTo, allUsers, showProfitColumn, lotteryType }: ExpandableRowProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [children, setChildren] = useState<EntityStats[]>([])
   const [isLoadingChildren, setIsLoadingChildren] = useState(false)
+  const isLola = lotteryType === 'lola'
 
   // Determinar el tipo de hijos según el tipo actual
   const getChildType = (parentType: string): 'comercializadora' | 'subdistribuidor' | 'agencia' | 'taquilla' | null => {
@@ -162,38 +165,68 @@ function ExpandableRow({ entity, level, dateFrom, dateTo, allUsers, showProfitCo
       const queryStart = startOfDay(dateFrom).toISOString()
       const queryEnd = endOfDay(dateTo).toISOString()
 
-      // Consultar ventas (bets)
+      // Consultar ventas
       let salesByUser = new Map<string, number>()
       if (taquillaIds.length > 0) {
-        const { data: salesData } = await supabase
-          .from('bets')
-          .select('user_id, amount')
-          .in('user_id', taquillaIds)
-          .gte('created_at', queryStart)
-          .lte('created_at', queryEnd)
-          .neq('status', 'cancelled')
+        if (isLola) {
+          const { data: salesData } = await supabase
+            .from('bets_item_lola_lottery')
+            .select('user_id, amount')
+            .in('user_id', taquillaIds)
+            .gte('created_at', queryStart)
+            .lte('created_at', queryEnd)
+            .neq('status', 'cancelled')
 
-        ;(salesData || []).forEach(bet => {
-          const current = salesByUser.get(bet.user_id) || 0
-          salesByUser.set(bet.user_id, current + Number(bet.amount || 0))
-        })
+          ;(salesData || []).forEach(item => {
+            const current = salesByUser.get(item.user_id) || 0
+            salesByUser.set(item.user_id, current + Number(item.amount || 0))
+          })
+        } else {
+          const { data: salesData } = await supabase
+            .from('bets')
+            .select('user_id, amount')
+            .in('user_id', taquillaIds)
+            .gte('created_at', queryStart)
+            .lte('created_at', queryEnd)
+            .neq('status', 'cancelled')
+
+          ;(salesData || []).forEach(bet => {
+            const current = salesByUser.get(bet.user_id) || 0
+            salesByUser.set(bet.user_id, current + Number(bet.amount || 0))
+          })
+        }
       }
 
-      // Consultar premios (bets_item_lottery_clasic)
+      // Consultar premios
       let prizesByUser = new Map<string, number>()
       if (taquillaIds.length > 0) {
-        const { data: prizesData } = await supabase
-          .from('bets_item_lottery_clasic')
-          .select('user_id, potential_bet_amount')
-          .in('user_id', taquillaIds)
-          .in('status', ['winner', 'paid'])
-          .gte('created_at', queryStart)
-          .lte('created_at', queryEnd)
+        if (isLola) {
+          const { data: prizesData } = await supabase
+            .from('bets_item_lola_lottery')
+            .select('user_id, prize, status')
+            .in('user_id', taquillaIds)
+            .in('status', ['winner', 'paid'])
+            .gte('created_at', queryStart)
+            .lte('created_at', queryEnd)
 
-        ;(prizesData || []).forEach(item => {
-          const current = prizesByUser.get(item.user_id) || 0
-          prizesByUser.set(item.user_id, current + Number(item.potential_bet_amount || 0))
-        })
+          ;(prizesData || []).forEach(item => {
+            const current = prizesByUser.get(item.user_id) || 0
+            prizesByUser.set(item.user_id, current + Number(item.prize || 0))
+          })
+        } else {
+          const { data: prizesData } = await supabase
+            .from('bets_item_lottery_clasic')
+            .select('user_id, potential_bet_amount')
+            .in('user_id', taquillaIds)
+            .in('status', ['winner', 'paid'])
+            .gte('created_at', queryStart)
+            .lte('created_at', queryEnd)
+
+          ;(prizesData || []).forEach(item => {
+            const current = prizesByUser.get(item.user_id) || 0
+            prizesByUser.set(item.user_id, current + Number(item.potential_bet_amount || 0))
+          })
+        }
       }
 
       // Calcular estadísticas por hijo
@@ -446,6 +479,7 @@ function ExpandableRow({ entity, level, dateFrom, dateTo, allUsers, showProfitCo
           dateTo={dateTo}
           allUsers={allUsers}
           showProfitColumn={showProfitColumn}
+          lotteryType={lotteryType}
         />
       ))}
     </>
@@ -459,7 +493,8 @@ export function HierarchicalStatsTable({
   dateTo,
   allUsers,
   isLoading,
-  currentUserType
+  currentUserType,
+  lotteryType
 }: HierarchicalStatsTableProps) {
   // Calcular totales
   const totals = rootEntities.reduce((acc, entity) => ({
@@ -522,6 +557,7 @@ export function HierarchicalStatsTable({
               dateTo={dateTo}
               allUsers={allUsers}
               showProfitColumn={showProfitColumn}
+              lotteryType={lotteryType}
             />
           ))}
 

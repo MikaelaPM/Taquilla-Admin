@@ -35,6 +35,15 @@ export function useDailyResults() {
     return `lola-${n}`
   }
 
+  const normalizeLolaNumber = (value: string) => {
+    const cleaned = String(value ?? '').trim().replace(/\D+/g, '')
+    if (!cleaned) return ''
+    const parsed = Number.parseInt(cleaned, 10)
+    if (Number.isNaN(parsed)) return ''
+    const normalized = ((parsed % 100) + 100) % 100
+    return String(normalized).padStart(2, '0')
+  }
+
   const loadDailyResults = useCallback(async (startDate?: string, endDate?: string) => {
     try {
       setLoadingClassic(true)
@@ -174,81 +183,116 @@ export function useDailyResults() {
   ): Promise<{ totalToPay: number; totalRaised: number }> => {
     try {
       // Parsear la fecha para obtener el rango del día
-      const dateObj = parseISO(resultDate)
-      const dayStart = startOfDay(dateObj).toISOString()
-      const dayEnd = endOfDay(dateObj).toISOString()
+      const dateObj = parseISO(resultDate);
+      const dayStart = startOfDay(dateObj).toISOString();
+      const dayEnd = endOfDay(dateObj).toISOString();
 
       // 1. Buscar todos los items de apuesta con el prize_id ganador para ese día
       // Primero obtenemos los bets del día que correspondan a esta lotería
       const { data: betsOfDay, error: betsError } = await supabase
-        .from('bets')
-        .select('id, amount')
-        .gte('created_at', dayStart)
-        .lte('created_at', dayEnd)
+        .from("bets")
+        .select("id, amount")
+        .gte("created_at", dayStart)
+        .lte("created_at", dayEnd);
 
       if (betsError) {
-        console.error('Error fetching bets:', betsError)
-        return { totalToPay: 0, totalRaised: 0 }
+        console.error("Error fetching bets:", betsError);
+        return { totalToPay: 0, totalRaised: 0 };
       }
 
-      const betIds = (betsOfDay || []).map(b => b.id)
+      const betIds = (betsOfDay || []).map((b) => b.id);
 
       if (betIds.length === 0) {
-        return { totalToPay: 0, totalRaised: 0 }
+        return { totalToPay: 0, totalRaised: 0 };
       }
 
       // 2. Buscar los items de lotería clásica con el premio ganador
       const { data: winningItems, error: itemsError } = await supabase
-        .from('bets_item_lottery_clasic')
-        .select('id, potential_bet_amount, amount')
-        .in('bets_id', betIds)
-        .eq('prize_id', prizeId)
-        .eq('status', 'active')
+        .from("bets_item_lottery_clasic")
+        .select("id, potential_bet_amount, amount")
+        .in("bets_id", betIds)
+        .eq("prize_id", prizeId)
+        .eq("status", "active");
 
       if (itemsError) {
-        console.error('Error fetching winning items:', itemsError)
-        return { totalToPay: 0, totalRaised: 0 }
+        console.error("Error fetching winning items:", itemsError);
+        return { totalToPay: 0, totalRaised: 0 };
       }
 
       // 3. Calcular total a pagar (suma de potential_bet_amount de ganadores)
       const totalToPay = (winningItems || []).reduce((sum, item) => {
-        return sum + (Number(item.potential_bet_amount) || 0)
-      }, 0)
+        return sum + (Number(item.potential_bet_amount) || 0);
+      }, 0);
 
       // 4. Actualizar status a 'winner' para los items ganadores
       if (winningItems && winningItems.length > 0) {
-        const winningIds = winningItems.map(w => w.id)
+        const winningIds = winningItems.map((w) => w.id);
 
         const { error: updateError } = await supabase
-          .from('bets_item_lottery_clasic')
-          .update({ status: 'winner' })
-          .in('id', winningIds)
+          .from("bets_item_lottery_clasic")
+          .update({ status: "winner" })
+          .in("id", winningIds);
 
-        if (updateError) {
-          console.error('Error updating winner status:', updateError)
+        const { data: prizeRow, error: prizeError } = await supabase
+          .from("prizes")
+          .select("multiplier")
+          .eq("id", prizeId)
+          .single();
+
+        if (prizeError) {
+          console.error("Error fetching prize multiplier:", prizeError);
+        }
+
+        const multiplierValue = Number(prizeRow?.multiplier);
+        let descriptionPrize = "";
+
+        if (Number.isFinite(multiplierValue) && multiplierValue > 0) {
+          const normalizedMultiplier = Number.isInteger(multiplierValue)
+            ? multiplierValue.toFixed(0)
+            : String(multiplierValue);
+          descriptionPrize = `x${normalizedMultiplier}`;
+        }
+
+        const winnerIds = winningItems.map((w) => w.id);
+        const winnerPrizes = winningItems.map(
+          (w) => Number(w.potential_bet_amount) || 0,
+        );
+        const winnerDescriptions = winningItems.map(() => descriptionPrize);
+
+        const { error: updateRpcError } = await supabase.rpc(
+          "mark_mikaela_prizes",
+          {
+            p_ids: winnerIds,
+            p_prizes: winnerPrizes,
+            p_descriptions: winnerDescriptions,
+          },
+        );
+
+        if (updateRpcError) {
+          console.error("Error updating winner status:", updateError);
         }
       }
 
       // 5. Calcular total recaudado del día para esta lotería
       // Obtener todos los items de lotería clásica del día (no solo ganadores)
       const { data: allItems, error: allItemsError } = await supabase
-        .from('bets_item_lottery_clasic')
-        .select('amount')
-        .in('bets_id', betIds)
+        .from("bets_item_lottery_clasic")
+        .select("amount")
+        .in("bets_id", betIds);
 
       if (allItemsError) {
-        console.error('Error fetching all items:', allItemsError)
-        return { totalToPay, totalRaised: 0 }
+        console.error("Error fetching all items:", allItemsError);
+        return { totalToPay, totalRaised: 0 };
       }
 
       // Total recaudado = suma de amounts de todos los items - total a pagar
       const totalSales = (allItems || []).reduce((sum, item) => {
-        return sum + (Number(item.amount) || 0)
-      }, 0)
+        return sum + (Number(item.amount) || 0);
+      }, 0);
 
-      const totalRaised = totalSales - totalToPay
+      const totalRaised = totalSales - totalToPay;
 
-      return { totalToPay, totalRaised }
+      return { totalToPay, totalRaised };
     } catch (err) {
       console.error('Error in calculateWinnersAndTotals:', err)
       return { totalToPay: 0, totalRaised: 0 }
@@ -315,11 +359,78 @@ export function useDailyResults() {
         return false
       }
 
+      const normalizedNumber = normalizeLolaNumber(number)
+      if (!normalizedNumber) {
+        console.error('Invalid Lola result number:', number)
+        return false
+      }
+
+      const dateObj = parseISO(normalizedResultDate)
+      const dayStart = startOfDay(dateObj).toISOString()
+      const dayEnd = endOfDay(dateObj).toISOString()
+
+      const n = Number.parseInt(normalizedNumber, 10)
+      const prevNumber = Number.isFinite(n) && n > 0 ? String(n - 1).padStart(2, '0') : ''
+      const nextNumber = Number.isFinite(n) && n < 99 ? String(n + 1).padStart(2, '0') : ''
+
+      const { data: lolaItems, error: lolaItemsError } = await supabase
+        .from('bets_item_lola_lottery')
+        .select('id, number, amount, status')
+        .eq('lola_lottery_id', dbLotteryId)
+        .gte('created_at', dayStart)
+        .lte('created_at', dayEnd)
+        .eq('status', 'active')
+
+        console.log(lolaItems);
+        
+
+      if (lolaItemsError) {
+        console.error('Error fetching lola items:', lolaItemsError)
+        return false
+      }
+
+      const winnerUpdates = (lolaItems || [])
+        .map((item: any) => {
+          const itemNumber = normalizeLolaNumber(String(item.number ?? ''))
+          if (!itemNumber) return null
+
+          const isExact = itemNumber === normalizedNumber
+          const isAdjacent = itemNumber === prevNumber || itemNumber === nextNumber
+          if (!isExact && !isAdjacent) return null
+
+          const multiplier = isExact ? 70 : 5
+          const prize = (Number(item.amount) || 0) * multiplier
+
+          return {
+            id: item.id,
+            status: 'winner',
+            prize,
+            description_prize: multiplier === 70 ? 'x70' : 'x5'
+          }
+        })
+        .filter(Boolean) as Array<{ id: string; status: string; prize: number; description_prize: string }>
+
+      if (winnerUpdates.length > 0) {
+
+        const winnerIds = winnerUpdates.map(w => w.id)
+        const winnerPrizes = winnerUpdates.map(w => w.prize)
+        const winnerDescriptions = winnerUpdates.map(w => w.description_prize)
+
+        const { error: updateError } = await supabase.rpc("mark_lola_winners", {
+          p_ids: winnerIds,
+          p_prizes: winnerPrizes,
+          p_descriptions: winnerDescriptions,
+        });
+        if (updateError) {
+          console.error('Error updating lola winner status:', updateError)
+        }
+      }
+
       const { error: insertError } = await supabase
         .from('daily_results_lola')
         .insert({
           lottery_id: dbLotteryId,
-          number,
+          number: normalizedNumber,
           total_to_pay: totalToPay,
           result_date: normalizedResultDate,
           total_raised: totalRaised - totalToPay
@@ -471,6 +582,78 @@ export function useDailyResults() {
     }
   }, [])
 
+  /**
+   * Obtiene los ganadores de un resultado Lola específico
+   * Busca en bets_item_lola_lottery los items con status 'winner' o 'paid'
+   * Filtra por lotería y día del resultado
+   */
+  const getWinnersForResultLola = useCallback(async (
+    lolaLotteryId: string,
+    resultDate: string
+  ): Promise<Array<{
+    id: string
+    amount: number
+    potentialWin: number
+    taquillaId: string
+    taquillaName: string
+    createdAt: string
+  }>> => {
+    try {
+      const dbLotteryId = toLolaDbLotteryId(lolaLotteryId)
+      if (!dbLotteryId) return []
+
+      const normalizedResultDate = getDatePart(resultDate)
+      if (!normalizedResultDate) return []
+
+      const dateObj = parseISO(normalizedResultDate)
+      const dayStart = startOfDay(dateObj).toISOString()
+      const dayEnd = endOfDay(dateObj).toISOString()
+
+      const { data: winningItems, error: itemsError } = await supabase
+        .from('bets_item_lola_lottery')
+        .select('id, user_id, amount, prize, created_at')
+        .eq('lola_lottery_id', dbLotteryId)
+        .in('status', ['winner', 'paid'])
+        .gte('created_at', dayStart)
+        .lte('created_at', dayEnd)
+
+      if (itemsError || !winningItems || winningItems.length === 0) {
+        return []
+      }
+
+      const userIds = [...new Set(winningItems.map(w => w.user_id).filter(Boolean))]
+
+      let usersMap = new Map<string, string>()
+      if (userIds.length > 0) {
+        const { data: users } = await supabase
+          .from('users')
+          .select('id, name')
+          .in('id', userIds)
+
+        if (users) {
+          usersMap = new Map(users.map(u => [u.id, u.name]))
+        }
+      }
+
+      return winningItems.map(item => {
+        const taquillaId = item.user_id || ''
+        const taquillaName = usersMap.get(taquillaId) || 'Desconocida'
+
+        return {
+          id: item.id,
+          amount: Number(item.amount) || 0,
+          potentialWin: Number(item.prize) || 0,
+          taquillaId,
+          taquillaName,
+          createdAt: item.created_at || ''
+        }
+      })
+    } catch (err) {
+      console.error('Error in getWinnersForResultLola:', err)
+      return []
+    }
+  }, [])
+
   useEffect(() => {
     Promise.all([
       loadDailyResults(),
@@ -494,6 +677,7 @@ export function useDailyResults() {
     getResultForLotteryAndDate,
     getResultForLotteryAndDateLola,
     getResultsForWeek,
-    getWinnersForResult
+    getWinnersForResult,
+    getWinnersForResultLola
   }
 }

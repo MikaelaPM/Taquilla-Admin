@@ -40,6 +40,9 @@ export interface UseTaquillaStatsOptions {
   // Rango de fechas personalizado (opcional)
   dateFrom?: Date
   dateTo?: Date
+
+  // Permite deshabilitar el hook (por ejemplo, cuando lotteryType = 'lola')
+  enabled?: boolean
 }
 
 export function useTaquillaStats(options: UseTaquillaStatsOptions) {
@@ -65,7 +68,14 @@ export function useTaquillaStats(options: UseTaquillaStatsOptions) {
   optionsRef.current = options
 
   const loadStats = useCallback(async () => {
-    const { taquillas, dateFrom, dateTo } = optionsRef.current
+    const { enabled = true, taquillas, dateFrom, dateTo } = optionsRef.current
+
+    if (!enabled) {
+      setStats([])
+      setLoading(false)
+      setError(null)
+      return
+    }
 
     if (!taquillas || taquillas.length === 0) {
       setStats([])
@@ -263,7 +273,7 @@ export function useTaquillaStats(options: UseTaquillaStatsOptions) {
     if (taquillasKey) {
       loadStats()
     }
-  }, [taquillasKey, dateRangeKey, loadStats])
+  }, [taquillasKey, dateRangeKey, options.enabled, loadStats])
 
   return {
     stats,

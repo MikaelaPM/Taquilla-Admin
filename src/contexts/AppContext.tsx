@@ -90,6 +90,14 @@ interface AppContextType {
     taquillaName: string
     createdAt: string
   }>>
+  getWinnersForResultLola: (lolaLotteryId: string, resultDate: string) => Promise<Array<{
+    id: string
+    amount: number
+    potentialWin: number
+    taquillaId: string
+    taquillaName: string
+    createdAt: string
+  }>>
 
   // Bets
   bets: Bet[]
@@ -238,7 +246,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     deleteDailyResult,
     getResultForLotteryAndDate,
     getResultForLotteryAndDateLola,
-    getWinnersForResult
+    getWinnersForResult,
+    getWinnersForResultLola
   } = useDailyResults()
 
   // Bets
@@ -758,6 +767,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     getResultForLotteryAndDate,
     getResultForLotteryAndDateLola,
     getWinnersForResult,
+    getWinnersForResultLola,
 
     bets: bets || [],
     betsLoading,

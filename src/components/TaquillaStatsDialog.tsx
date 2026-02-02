@@ -164,6 +164,17 @@ export function TaquillaStatsDialog({ open, onOpenChange, taquilla }: Props) {
                 register.totalPrizes = winningItems.reduce((sum, item) =>
                   sum + Number(item.potential_bet_amount || 0), 0)
               }
+
+              const { data: lolaWinningItems } = await supabase
+                .from('bets_item_lola_lottery')
+                .select('prize')
+                .in('bets_id', activeBetIds)
+                .in('status', ['winner', 'paid'])
+
+              if (lolaWinningItems) {
+                register.totalPrizes += lolaWinningItems.reduce((sum, item) =>
+                  sum + Number(item.prize || 0), 0)
+              }
             }
           }
         }
@@ -305,8 +316,16 @@ export function TaquillaStatsDialog({ open, onOpenChange, taquilla }: Props) {
           .eq('bets_id', bet.id)
           .in('status', ['winner', 'paid'])
 
-        const totalPrize = winningItems?.reduce((sum, item) =>
-          sum + Number(item.potential_bet_amount || 0), 0) || 0
+        const { data: lolaWinningItems } = await supabase
+          .from('bets_item_lola_lottery')
+          .select('prize')
+          .eq('bets_id', bet.id)
+          .in('status', ['winner', 'paid'])
+
+        const totalPrize = (winningItems?.reduce((sum, item) =>
+          sum + Number(item.potential_bet_amount || 0), 0) || 0)
+          + (lolaWinningItems?.reduce((sum, item) =>
+            sum + Number(item.prize || 0), 0) || 0)
 
         return {
           ...bet,
@@ -335,56 +354,93 @@ export function TaquillaStatsDialog({ open, onOpenChange, taquilla }: Props) {
     setTicketItems([])
 
     try {
-      const { data: items, error: itemsError } = await supabase
+      const { data: classicItems, error: classicItemsError } = await supabase
         .from('bets_item_lottery_clasic')
         .select('*')
         .eq('bets_id', ticketId)
 
-      if (itemsError) throw itemsError
+      if (classicItemsError) throw classicItemsError
 
-      if (items && items.length > 0) {
-        const prizeIds = items.map((item: any) => item.prize_id).filter(Boolean)
+      const { data: lolaItems, error: lolaItemsError } = await supabase
+        .from('bets_item_lola_lottery')
+        .select('id, lola_lottery_id, number, amount, status, prize')
+        .eq('bets_id', ticketId)
 
-        let prizesMap = new Map()
-        let lotteriesMap = new Map()
+      if (lolaItemsError) throw lolaItemsError
 
-        if (prizeIds.length > 0) {
-          const [prizesResult, lotteriesResult] = await Promise.all([
-            supabase
-              .from('prizes')
-              .select('id, lottery_id, animal_number, animal_name')
-              .in('id', prizeIds),
-            supabase
-              .from('lotteries')
-              .select('id, name, draw_time')
-          ])
+      const prizeIds = (classicItems || []).map((item: any) => item.prize_id).filter(Boolean)
 
-          if (prizesResult.data) {
-            prizesMap = new Map(prizesResult.data.map((p: any) => [p.id, p]))
-          }
-          if (lotteriesResult.data) {
-            lotteriesMap = new Map(lotteriesResult.data.map((l: any) => [l.id, l]))
-          }
+      let prizesMap = new Map()
+      let lotteriesMap = new Map()
+
+      if (prizeIds.length > 0) {
+        const [prizesResult, lotteriesResult] = await Promise.all([
+          supabase
+            .from('prizes')
+            .select('id, lottery_id, animal_number, animal_name')
+            .in('id', prizeIds),
+          supabase
+            .from('lotteries')
+            .select('id, name, draw_time')
+        ])
+
+        if (prizesResult.data) {
+          prizesMap = new Map(prizesResult.data.map((p: any) => [p.id, p]))
         }
-
-        const mappedItems: TicketItem[] = items.map((item: any) => {
-          const prize = item.prize_id ? prizesMap.get(item.prize_id) : null
-          const lottery = prize ? lotteriesMap.get(prize.lottery_id) : null
-
-          return {
-            id: item.id,
-            animalNumber: prize?.animal_number || item.item_number || '',
-            animalName: prize?.animal_name || 'Desconocido',
-            lotteryName: lottery?.name || 'Desconocida',
-            drawTime: lottery?.draw_time || '',
-            amount: Number(item.amount) || 0,
-            status: item.status || '',
-            potentialBetAmount: Number(item.potential_bet_amount) || 0
-          }
-        })
-
-        setTicketItems(mappedItems)
+        if (lotteriesResult.data) {
+          lotteriesMap = new Map(lotteriesResult.data.map((l: any) => [l.id, l]))
+        }
       }
+
+      let lolaLotteriesMap = new Map<string, { name: string; drawTime: string }>()
+      const lolaLotteryIds = [...new Set((lolaItems || []).map((item: any) => Number(item.lola_lottery_id)).filter((n: any) => Number.isFinite(n)))]
+      if (lolaLotteryIds.length > 0) {
+        const { data: lolaLotteries } = await supabase
+          .from('lola_lotteries')
+          .select('id, name, draw_time')
+          .in('id', lolaLotteryIds)
+
+        if (lolaLotteries) {
+          lolaLotteriesMap = new Map(lolaLotteries.map((l: any) => [
+            String(l.id),
+            { name: l.name || `Lola #${l.id}`, drawTime: l.draw_time || '' }
+          ]))
+        }
+      }
+
+      const mappedClassic: TicketItem[] = (classicItems || []).map((item: any) => {
+        const prize = item.prize_id ? prizesMap.get(item.prize_id) : null
+        const lottery = prize ? lotteriesMap.get(prize.lottery_id) : null
+
+        return {
+          id: item.id,
+          animalNumber: prize?.animal_number || item.item_number || '',
+          animalName: prize?.animal_name || 'Desconocido',
+          lotteryName: lottery?.name || 'Desconocida',
+          drawTime: lottery?.draw_time || '',
+          amount: Number(item.amount) || 0,
+          status: item.status || '',
+          potentialBetAmount: Number(item.potential_bet_amount) || 0
+        }
+      })
+
+      const mappedLola: TicketItem[] = (lolaItems || []).map((item: any) => {
+        const lolaInfo = lolaLotteriesMap.get(String(item.lola_lottery_id))
+        const number = String(item.number ?? '')
+
+        return {
+          id: item.id,
+          animalNumber: number || '',
+          animalName: number ? `Número ${number}` : 'Lola',
+          lotteryName: lolaInfo?.name || `Lola #${item.lola_lottery_id}`,
+          drawTime: lolaInfo?.drawTime || '',
+          amount: Number(item.amount) || 0,
+          status: item.status || '',
+          potentialBetAmount: Number(item.prize) || 0
+        }
+      })
+
+      setTicketItems([...mappedClassic, ...mappedLola])
     } catch (err) {
       console.error('Error fetching ticket items:', err)
     } finally {

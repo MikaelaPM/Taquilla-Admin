@@ -59,6 +59,9 @@ export interface UseComercializadoraStatsOptions {
   // Rango de fechas personalizado (opcional)
   dateFrom?: Date
   dateTo?: Date
+
+  // Permite deshabilitar el hook (por ejemplo, cuando lotteryType = 'lola')
+  enabled?: boolean
 }
 
 export function useComercializadoraStats(options: UseComercializadoraStatsOptions) {
@@ -94,7 +97,14 @@ export function useComercializadoraStats(options: UseComercializadoraStatsOption
   optionsRef.current = options
 
   const loadStats = useCallback(async () => {
-    const { comercializadoras, agencies, subdistribuidores, taquillas, dateFrom, dateTo } = optionsRef.current
+    const { enabled = true, comercializadoras, agencies, subdistribuidores, taquillas, dateFrom, dateTo } = optionsRef.current
+
+    if (!enabled) {
+      setStats([])
+      setLoading(false)
+      setError(null)
+      return
+    }
 
     if (!comercializadoras || comercializadoras.length === 0) {
       setStats([])
@@ -397,7 +407,7 @@ export function useComercializadoraStats(options: UseComercializadoraStatsOption
     if (comercializadorasKey) {
       loadStats()
     }
-  }, [comercializadorasKey, agenciesKey, taquillasKey, dateRangeKey, loadStats])
+  }, [comercializadorasKey, agenciesKey, taquillasKey, dateRangeKey, options.enabled, loadStats])
 
   return {
     stats,

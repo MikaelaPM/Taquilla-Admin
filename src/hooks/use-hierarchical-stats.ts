@@ -26,10 +26,13 @@ interface UseHierarchicalStatsOptions {
   allUsers: any[]
   dateFrom: Date
   dateTo: Date
+  lotteryType?: 'lola' | 'mikaela'
+  enabled?: boolean
 }
 
 export function useHierarchicalStats(options: UseHierarchicalStatsOptions) {
-  const { currentUser, allUsers, dateFrom, dateTo } = options
+  const { currentUser, allUsers, dateFrom, dateTo, lotteryType, enabled = true } = options
+  const isLola = lotteryType === 'lola'
 
   const [rootEntities, setRootEntities] = useState<EntityStats[]>([])
   const [loading, setLoading] = useState(false)
@@ -54,6 +57,13 @@ export function useHierarchicalStats(options: UseHierarchicalStatsOptions) {
 
   // Cargar estadísticas de las entidades raíz
   const loadStats = useCallback(async () => {
+    if (!enabled) {
+      setRootEntities([])
+      setLoading(false)
+      setError(null)
+      return
+    }
+
     if (!currentUser || allUsers.length === 0) {
       setRootEntities([])
       return
@@ -189,38 +199,68 @@ export function useHierarchicalStats(options: UseHierarchicalStatsOptions) {
         taquillaIds = allTaquillas.map(t => t.id)
       }
 
-      // Consultar ventas (bets)
+      // Consultar ventas
       let salesByTaquilla = new Map<string, number>()
       if (taquillaIds.length > 0) {
-        const { data: salesData } = await supabase
-          .from('bets')
-          .select('user_id, amount')
-          .in('user_id', taquillaIds)
-          .gte('created_at', queryStart)
-          .lte('created_at', queryEnd)
-          .neq('status', 'cancelled')
+        if (isLola) {
+          const { data: salesData } = await supabase
+            .from('bets_item_lola_lottery')
+            .select('user_id, amount')
+            .in('user_id', taquillaIds)
+            .gte('created_at', queryStart)
+            .lte('created_at', queryEnd)
+            .neq('status', 'cancelled')
 
-        ;(salesData || []).forEach(bet => {
-          const current = salesByTaquilla.get(bet.user_id) || 0
-          salesByTaquilla.set(bet.user_id, current + Number(bet.amount || 0))
-        })
+          ;(salesData || []).forEach(item => {
+            const current = salesByTaquilla.get(item.user_id) || 0
+            salesByTaquilla.set(item.user_id, current + Number(item.amount || 0))
+          })
+        } else {
+          const { data: salesData } = await supabase
+            .from('bets')
+            .select('user_id, amount')
+            .in('user_id', taquillaIds)
+            .gte('created_at', queryStart)
+            .lte('created_at', queryEnd)
+            .neq('status', 'cancelled')
+
+          ;(salesData || []).forEach(bet => {
+            const current = salesByTaquilla.get(bet.user_id) || 0
+            salesByTaquilla.set(bet.user_id, current + Number(bet.amount || 0))
+          })
+        }
       }
 
-      // Consultar premios (bets_item_lottery_clasic)
+      // Consultar premios
       let prizesByTaquilla = new Map<string, number>()
       if (taquillaIds.length > 0) {
-        const { data: prizesData } = await supabase
-          .from('bets_item_lottery_clasic')
-          .select('user_id, potential_bet_amount')
-          .in('user_id', taquillaIds)
-          .in('status', ['winner', 'paid'])
-          .gte('created_at', queryStart)
-          .lte('created_at', queryEnd)
+        if (isLola) {
+          const { data: prizesData } = await supabase
+            .from('bets_item_lola_lottery')
+            .select('user_id, prize, status')
+            .in('user_id', taquillaIds)
+            .in('status', ['winner', 'paid'])
+            .gte('created_at', queryStart)
+            .lte('created_at', queryEnd)
 
-        ;(prizesData || []).forEach(item => {
-          const current = prizesByTaquilla.get(item.user_id) || 0
-          prizesByTaquilla.set(item.user_id, current + Number(item.potential_bet_amount || 0))
-        })
+          ;(prizesData || []).forEach(item => {
+            const current = prizesByTaquilla.get(item.user_id) || 0
+            prizesByTaquilla.set(item.user_id, current + Number(item.prize || 0))
+          })
+        } else {
+          const { data: prizesData } = await supabase
+            .from('bets_item_lottery_clasic')
+            .select('user_id, potential_bet_amount')
+            .in('user_id', taquillaIds)
+            .in('status', ['winner', 'paid'])
+            .gte('created_at', queryStart)
+            .lte('created_at', queryEnd)
+
+          ;(prizesData || []).forEach(item => {
+            const current = prizesByTaquilla.get(item.user_id) || 0
+            prizesByTaquilla.set(item.user_id, current + Number(item.potential_bet_amount || 0))
+          })
+        }
       }
 
       // Calcular estadísticas por entidad
@@ -388,7 +428,7 @@ export function useHierarchicalStats(options: UseHierarchicalStatsOptions) {
     } finally {
       setLoading(false)
     }
-  }, [currentUser, allUsers, dateFrom, dateTo, rootType])
+  }, [currentUser, allUsers, dateFrom, dateTo, rootType, enabled, isLola])
 
   // Cargar stats cuando cambien las dependencias
   useEffect(() => {

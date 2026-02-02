@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { useApp } from '@/contexts/AppContext'
 import { useLotteryTypePreference } from '@/contexts/LotteryTypeContext'
 import { useSalesStats } from '@/hooks/use-sales-stats'
+import { useSalesStatsLola } from '@/hooks/use-sales-stats-lola'
 import { useComercializadoraStats } from '@/hooks/use-comercializadora-stats'
 import { useAgencyStats } from '@/hooks/use-agency-stats'
 import { useTaquillaStats } from '@/hooks/use-taquilla-stats'
@@ -36,8 +37,10 @@ export function DashboardPage() {
   const {
     lotteries,
     dailyResults,
+    dailyResultsLola,
     dailyResultsLoading,
     loadDailyResults,
+    loadDailyResultsLola,
     winners,
     winnersLoading,
     loadWinners,
@@ -83,7 +86,17 @@ export function DashboardPage() {
   // Determinar si el usuario es admin (puede ver datos globales)
   const isAdmin = currentUser?.userType === 'admin' || !currentUser?.userType
 
-  const { stats: salesStats, loading: salesLoading, refresh: refreshSales } = useSalesStats({ visibleTaquillaIds })
+  const { stats: salesStats, loading: salesLoading, refresh: refreshSales } = useSalesStats({
+    visibleTaquillaIds,
+    enabled: lotteryType !== 'lola'
+  })
+
+  const { stats: lolaSalesStats, loading: lolaSalesLoading, refresh: refreshLolaSales } = useSalesStatsLola({
+    visibleTaquillaIds,
+    dateFrom: appliedDateRange.from,
+    dateTo: appliedDateRange.to,
+    enabled: lotteryType === 'lola'
+  })
 
   // Determinar tipo de usuario
   const isComercializadora = currentUser?.userType === 'comercializadora'
@@ -97,7 +110,8 @@ export function DashboardPage() {
     subdistribuidores: subdistribuidores || [],
     taquillas: visibleTaquillas || [],
     dateFrom: appliedDateRange.from,
-    dateTo: appliedDateRange.to
+    dateTo: appliedDateRange.to,
+    enabled: lotteryType !== 'lola'
   })
 
   // Stats de agencias para la tabla (para comercializadoras)
@@ -105,14 +119,16 @@ export function DashboardPage() {
     agencies: visibleAgencies || [],
     taquillas: visibleTaquillas || [],
     dateFrom: appliedDateRange.from,
-    dateTo: appliedDateRange.to
+    dateTo: appliedDateRange.to,
+    enabled: lotteryType !== 'lola'
   })
 
   // Stats de taquillas para la tabla (para agencias)
   const { stats: taquillaStats, loading: taquillaStatsLoading, refresh: refreshTaquillaStats } = useTaquillaStats({
     taquillas: visibleTaquillas || [],
     dateFrom: appliedDateRange.from,
-    dateTo: appliedDateRange.to
+    dateTo: appliedDateRange.to,
+    enabled: lotteryType !== 'lola'
   })
 
   // Stats jerárquicos (para la tabla expandible)
@@ -125,7 +141,9 @@ export function DashboardPage() {
     currentUser,
     allUsers,
     dateFrom: appliedDateRange.from,
-    dateTo: appliedDateRange.to
+    dateTo: appliedDateRange.to,
+    lotteryType: lotteryType === 'lola' ? 'lola' : 'mikaela',
+    enabled: true
   })
 
   // Determinar qué período usar basándose en el rango de fechas aplicado
@@ -156,7 +174,10 @@ export function DashboardPage() {
     const toDate = endOfDay(appliedDateRange.to)
     return winners.filter(w => {
       const winnerDate = new Date(w.createdAt)
-      return isWithinInterval(winnerDate, { start: fromDate, end: toDate })
+      if (!isWithinInterval(winnerDate, { start: fromDate, end: toDate })) return false
+      const lotteryId = String(w.lotteryId || '')
+      if (lotteryId.startsWith('lola-')) return false
+      return true
     })
   }, [winners, appliedDateRange])
 
@@ -355,13 +376,29 @@ export function DashboardPage() {
   // Estadísticas de resultados - usando datos según el perfil del usuario
   const periodStats = useMemo(() => {
     if (lotteryType === 'lola') {
+      const fromDate = startOfDay(appliedDateRange.from)
+      const toDate = endOfDay(appliedDateRange.to)
+
+      const filteredResults = dailyResultsLola.filter(r => {
+        const resultDate = parseISO(r.resultDate)
+        return isWithinInterval(resultDate, { start: fromDate, end: toDate })
+      })
+
+      const resultsCount = filteredResults.length
+      const resultsWithWinners = filteredResults.filter(r => (r.totalToPay || 0) > 0).length
+
+      const totalSales = lolaSalesStats.rangeSales
+      const totalPayout = filteredResults.reduce((sum, r) => sum + (r.totalToPay || 0), 0)
+      const totalCommissions = lolaSalesStats.rangeTaquillaCommissions
+      const totalRaised = totalSales - totalPayout - totalCommissions
+
       return {
-        totalSales: 0,
-        totalPayout: 0,
-        totalCommissions: 0,
-        totalRaised: 0,
-        resultsCount: 0,
-        resultsWithWinners: 0
+        totalSales,
+        totalPayout,
+        totalCommissions,
+        totalRaised,
+        resultsCount,
+        resultsWithWinners
       }
     }
 
@@ -455,18 +492,25 @@ export function DashboardPage() {
       resultsCount,
       resultsWithWinners
     }
-  }, [dailyResults, appliedDateRange, filteredWinners, salesStats, comercializadoraStats, comercializadoraTotals, agencyStats, agencyTotals, taquillaStats, taquillaTotals, isAdmin, isComercializadora, isSubdistribuidor, isAgencia, periodType, currentUserCommissionPercent, lotteryType])
+  }, [dailyResults, dailyResultsLola, appliedDateRange, filteredWinners, salesStats, lolaSalesStats, comercializadoraStats, comercializadoraTotals, agencyStats, agencyTotals, taquillaStats, taquillaTotals, isAdmin, isComercializadora, isSubdistribuidor, isAgencia, periodType, currentUserCommissionPercent, lotteryType])
 
   // Últimos resultados (para todos los usuarios)
-  const latestResults = useMemo(() => {
-    const filtered = dailyResults.filter((r) =>
-      lotteryType === 'lola' ? r.lotteryId.startsWith('lola-') : !r.lotteryId.startsWith('lola-')
-    )
+  const latestClassicResults = useMemo(() => {
+    if (lotteryType === 'lola') return []
+    const filtered = dailyResults.filter((r) => !r.lotteryId.startsWith('lola-'))
 
     return [...filtered]
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .slice(0, 5)
   }, [dailyResults, lotteryType])
+
+  const latestLolaResults = useMemo(() => {
+    if (lotteryType !== 'lola') return []
+
+    return [...dailyResultsLola]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 5)
+  }, [dailyResultsLola, lotteryType])
 
   // Loterías activas
   const activeLotteries = lotteries.filter(l => l.isActive)
@@ -494,8 +538,10 @@ export function DashboardPage() {
 
   const handleRefreshAll = () => {
     loadDailyResults()
+    loadDailyResultsLola()
     loadWinners()
     refreshSales()
+    refreshLolaSales()
     refreshHierarchy()
     if (isAgencia) {
       refreshTaquillaStats()
@@ -572,7 +618,9 @@ export function DashboardPage() {
     setIsApplyingFilter(false)
   }, [pendingDateRange])
 
-  const isLoading = dailyResultsLoading || winnersLoading || salesLoading || comercializadoraStatsLoading || agencyStatsLoading || taquillaStatsLoading || hierarchyLoading || isApplyingFilter
+  const isLoading = dailyResultsLoading || winnersLoading || salesLoading || lolaSalesLoading || comercializadoraStatsLoading || agencyStatsLoading || taquillaStatsLoading || hierarchyLoading || isApplyingFilter
+
+  const topTaquillas = lotteryType === 'lola' ? lolaSalesStats.salesByTaquilla : salesStats.salesByTaquilla
 
   // Validar si las fechas pendientes son válidas
   const isDateRangeValid = pendingDateRange.to >= pendingDateRange.from
@@ -726,7 +774,7 @@ export function DashboardPage() {
               </div>
             </div>
             <div className="mt-2 text-xs text-muted-foreground">
-              {filteredWinners.length} jugadas ganadoras
+              {lotteryType === 'lola' ? lolaSalesStats.winnersCount : filteredWinners.length} jugadas ganadoras
             </div>
           </CardContent>
         </Card>
@@ -855,14 +903,14 @@ export function DashboardPage() {
                 <Clock className="h-5 w-5 text-primary" />
                 <h3 className="font-semibold">Últimos Resultados</h3>
               </div>
-              {latestResults.length === 0 ? (
+              {(lotteryType === 'lola' ? latestLolaResults : latestClassicResults).length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-8 text-center">
                   <Clock className="h-10 w-10 text-muted-foreground mb-2" />
                   <p className="text-sm text-muted-foreground">No hay resultados cargados</p>
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {latestResults.map((result) => (
+                  {lotteryType !== 'lola' && latestClassicResults.map((result) => (
                     <div key={result.id} className="flex items-center gap-3 p-2 rounded-lg bg-muted/30">
                       <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center">
                         <span className="text-sm font-bold text-white">
@@ -871,6 +919,38 @@ export function DashboardPage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{result.lottery?.name || 'Lotería'}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {format(parseISO(result.resultDate), "dd/MM/yyyy", { locale: es })}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        {(result.totalToPay || 0) > 0 ? (
+                          <>
+                            <p className="text-sm font-bold text-red-600">{formatCurrency(result.totalToPay || 0)}</p>
+                            <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200">
+                              Con ganadores
+                            </Badge>
+                          </>
+                        ) : (
+                          <Badge variant="outline" className="text-[10px]">
+                            Sin ganadores
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+
+                  {lotteryType === 'lola' && latestLolaResults.map((result) => (
+                    <div key={result.id} className="flex items-center gap-3 p-2 rounded-lg bg-muted/30">
+                      <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center">
+                        <span className="text-sm font-bold text-white">
+                          {result.number || '??'}
+                        </span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">
+                          {lotteries.find(l => l.id === result.lotteryId)?.name || 'Lola'}
+                        </p>
                         <p className="text-xs text-muted-foreground">
                           {format(parseISO(result.resultDate), "dd/MM/yyyy", { locale: es })}
                         </p>
@@ -905,14 +985,14 @@ export function DashboardPage() {
               <h3 className="font-semibold">Top Taquillas</h3>
               <Badge variant="outline" className="ml-auto text-xs">Ventas</Badge>
             </div>
-            {salesStats.salesByTaquilla.length === 0 ? (
+            {topTaquillas.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-center">
                 <Storefront className="h-10 w-10 text-muted-foreground mb-2" />
                 <p className="text-sm text-muted-foreground">No hay ventas registradas</p>
               </div>
             ) : (
               <div className="space-y-3">
-                {salesStats.salesByTaquilla.slice(0, 5).map((taquilla, index) => (
+                {topTaquillas.slice(0, 5).map((taquilla, index) => (
                   <div key={taquilla.taquillaId} className="flex items-center gap-3 p-2 rounded-lg bg-muted/30">
                     <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground font-semibold text-sm">
                       {index + 1}
@@ -959,6 +1039,7 @@ export function DashboardPage() {
             allUsers={allUsers}
             isLoading={hierarchyLoading}
             currentUserType={currentUser?.userType}
+            lotteryType={lotteryType}
           />
         </CardContent>
       </Card>
