@@ -10,6 +10,7 @@ import { Progress } from '@/components/ui/progress'
 import { useApp } from '@/contexts/AppContext'
 import { useLotteryTypePreference } from '@/contexts/LotteryTypeContext'
 import { useBetsStats } from '@/hooks/use-bets-stats'
+import { useSalesStatsLola } from '@/hooks/use-sales-stats-lola'
 import { useComercializadoraStats } from '@/hooks/use-comercializadora-stats'
 import { useAgencyStats } from '@/hooks/use-agency-stats'
 import { useTaquillaStats } from '@/hooks/use-taquilla-stats'
@@ -38,8 +39,10 @@ import {
 export function ReportsPage() {
   const {
     dailyResults,
+    dailyResultsLola,
     dailyResultsLoading,
     loadDailyResults,
+    loadDailyResultsLola,
     lotteries,
     winners,
     users,
@@ -82,7 +85,8 @@ export function ReportsPage() {
     subdistribuidores: subdistribuidores || [],
     taquillas: visibleTaquillas || [],
     dateFrom: appliedDateRange.from,
-    dateTo: appliedDateRange.to
+    dateTo: appliedDateRange.to,
+    enabled: lotteryType !== 'lola'
   })
 
   // Stats de agencias (para comercializadora)
@@ -90,14 +94,23 @@ export function ReportsPage() {
     agencies: visibleAgencies || [],
     taquillas: visibleTaquillas || [],
     dateFrom: appliedDateRange.from,
-    dateTo: appliedDateRange.to
+    dateTo: appliedDateRange.to,
+    enabled: lotteryType !== 'lola'
   })
 
   // Stats de taquillas (para agencia)
   const { stats: taquillaStats, refresh: refreshTaquillaStats } = useTaquillaStats({
     taquillas: visibleTaquillas || [],
     dateFrom: appliedDateRange.from,
-    dateTo: appliedDateRange.to
+    dateTo: appliedDateRange.to,
+    enabled: lotteryType !== 'lola'
+  })
+
+  const { stats: lolaSalesStats, refresh: refreshLolaSales } = useSalesStatsLola({
+    visibleTaquillaIds,
+    dateFrom: appliedDateRange.from,
+    dateTo: appliedDateRange.to,
+    enabled: lotteryType === 'lola'
   })
 
   const [periodFilter, setPeriodFilter] = useState<'today' | 'week' | 'month' | 'custom'>('month')
@@ -124,7 +137,8 @@ export function ReportsPage() {
 
   // Filtrar resultados por período usando dateRange
   const filteredResults = useMemo(() => {
-    return dailyResults.filter(result => {
+    const list = lotteryType === 'lola' ? dailyResultsLola : dailyResults
+    return list.filter(result => {
       const resultDate = parseISO(result.resultDate)
 
       // Filtro por tipo de lotería (Mikaela vs Lola)
@@ -143,7 +157,7 @@ export function ReportsPage() {
       const toDate = endOfDay(dateRange.to)
       return resultDate >= fromDate && resultDate <= toDate
     })
-  }, [dailyResults, selectedLottery, dateRange, lotteryType])
+  }, [dailyResults, dailyResultsLola, selectedLottery, dateRange, lotteryType])
 
   // Filtrar ganadores por período usando dateRange
   const filteredWinners = useMemo(() => {
@@ -193,6 +207,14 @@ export function ReportsPage() {
     let totalPrizes = 0
     let totalCommissions = 0
     let totalBalance = 0
+
+    if (lotteryType === 'lola') {
+      totalSales = lolaSalesStats.rangeSales
+      totalPrizes = filteredWinners.reduce((sum, w) => sum + w.potentialWin, 0)
+      totalCommissions = lolaSalesStats.rangeTaquillaCommissions
+      totalBalance = totalSales - totalPrizes - totalCommissions
+      return { totalSales, totalPrizes, totalCommissions, totalBalance }
+    }
 
     // Seleccionar el hook correcto según el tipo de usuario
     if (isAdmin && comercializadoraStats && comercializadoraStats.length > 0) {
@@ -294,7 +316,7 @@ export function ReportsPage() {
     }
 
     return { totalSales, totalPrizes, totalCommissions, totalBalance }
-  }, [isAdmin, isComercializadora, isSubdistribuidor, isAgencia, comercializadoraStats, agencyStats, taquillaStats, periodFilter, currentUser, comercializadoras, subdistribuidores, agencies])
+  }, [lotteryType, lolaSalesStats, filteredWinners, isAdmin, isComercializadora, isSubdistribuidor, isAgencia, comercializadoraStats, agencyStats, taquillaStats, periodFilter, currentUser, comercializadoras, subdistribuidores, agencies])
 
   // Estadísticas principales - usando datos filtrados por taquillas visibles
   const stats = useMemo(() => {
@@ -485,8 +507,11 @@ export function ReportsPage() {
 
   const handleRefresh = () => {
     loadDailyResults()
+    loadDailyResultsLola()
     // Refrescar stats según el tipo de usuario
-    if (isAdmin) {
+    if (lotteryType === 'lola') {
+      refreshLolaSales()
+    } else if (isAdmin) {
       refreshComercializadoraStats()
     } else if (isComercializadora) {
       refreshAgencyStats()

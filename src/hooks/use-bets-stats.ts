@@ -57,6 +57,140 @@ export function useBetsStats(options?: UseBetsStatsOptions) {
     }
 
     try {
+      const isLola = queryOptions?.lotteryType === 'lola'
+
+      if (isLola) {
+        const toLolaDbId = (lotteryId?: string) => {
+          const s = String(lotteryId ?? '').trim()
+          if (!s) return null
+          const m = s.match(/^lola-(\d+)$/)
+          const raw = m ? m[1] : s
+          const n = Number.parseInt(raw, 10)
+          return Number.isFinite(n) ? n : null
+        }
+
+        // Loterías Lola
+        const { data: lolaLotteries, error: lolaLotteriesError } = await supabase
+          .from('lola_lotteries')
+          .select('id, name')
+
+        if (lolaLotteriesError) {
+          console.error('Error fetching lola lotteries:', lolaLotteriesError)
+          setError(lolaLotteriesError.message)
+          setLoading(false)
+          return
+        }
+
+        const lolaLotteriesMap = new Map<string, string>()
+        if (lolaLotteries) {
+          lolaLotteries.forEach(l => {
+            lolaLotteriesMap.set(String(l.id), l.name || `Lola #${l.id}`)
+          })
+        }
+
+        let lolaQuery = supabase
+          .from('bets_item_lola_lottery')
+          .select('id, user_id, lola_lottery_id, number, amount, prize, status, created_at')
+          .neq('status', 'cancelled')
+          .order('created_at', { ascending: false })
+          .limit(10000)
+
+        if (queryOptions?.startDate) {
+          lolaQuery = lolaQuery.gte('created_at', queryOptions.startDate)
+        }
+        if (queryOptions?.endDate) {
+          lolaQuery = lolaQuery.lte('created_at', queryOptions.endDate)
+        }
+
+        if (visibleTaquillaIds && visibleTaquillaIds.length > 0) {
+          lolaQuery = lolaQuery.in('user_id', visibleTaquillaIds)
+        }
+
+        if (queryOptions?.lotteryId && queryOptions.lotteryId !== 'all') {
+          const dbId = toLolaDbId(queryOptions.lotteryId)
+          if (dbId !== null) {
+            lolaQuery = lolaQuery.eq('lola_lottery_id', dbId)
+          }
+        }
+
+        const { data: lolaItems, error: lolaFetchError } = await lolaQuery
+
+        if (lolaFetchError) {
+          console.error('Error fetching lola bets items:', lolaFetchError)
+          setError(lolaFetchError.message)
+          setLoading(false)
+          return
+        }
+
+        if (!lolaItems || lolaItems.length === 0) {
+          setTopMostPlayed([])
+          setTopHighestAmount([])
+          setLoading(false)
+          return
+        }
+
+        const numberStats = new Map<string, BetNumberStats>()
+
+        lolaItems.forEach((item: any) => {
+          const key = String(item.number ?? '') || '??'
+          const current = numberStats.get(key) || {
+            animalNumber: key,
+            animalName: key ? `Número ${key}` : 'Lola',
+            timesPlayed: 0,
+            totalAmount: 0,
+            totalPotentialWin: 0,
+            lotteryBreakdown: new Map()
+          }
+
+          current.timesPlayed += 1
+          current.totalAmount += Number(item.amount) || 0
+          current.totalPotentialWin += Number(item.prize) || 0
+
+          const lotteryId = `lola-${item.lola_lottery_id}`
+          const lotteryData = current.lotteryBreakdown.get(lotteryId) || {
+            lotteryId,
+            lotteryName: lolaLotteriesMap.get(String(item.lola_lottery_id)) || `Lola #${item.lola_lottery_id}`,
+            count: 0,
+            amount: 0
+          }
+          lotteryData.count += 1
+          lotteryData.amount += Number(item.amount) || 0
+          current.lotteryBreakdown.set(lotteryId, lotteryData)
+
+          numberStats.set(key, current)
+        })
+
+        const mostPlayed: TopPlayedNumber[] = Array.from(numberStats.values())
+          .map(item => ({
+            number: item.animalNumber,
+            animalName: item.animalName,
+            timesPlayed: item.timesPlayed,
+            lotteries: Array.from(item.lotteryBreakdown.values())
+              .sort((a, b) => b.count - a.count)
+              .slice(0, 3)
+              .map(l => ({ lotteryId: l.lotteryId, lotteryName: l.lotteryName, count: l.count }))
+          }))
+          .sort((a, b) => b.timesPlayed - a.timesPlayed)
+          .slice(0, 10)
+
+        const highestAmount: TopAmountNumber[] = Array.from(numberStats.values())
+          .map(item => ({
+            number: item.animalNumber,
+            animalName: item.animalName,
+            totalAmount: item.totalAmount,
+            timesPlayed: item.timesPlayed,
+            avgAmount: item.timesPlayed > 0 ? item.totalAmount / item.timesPlayed : 0,
+            totalPotentialWin: item.totalPotentialWin
+          }))
+          .sort((a, b) => b.totalAmount - a.totalAmount)
+          .slice(0, 10)
+
+        setTopMostPlayed(mostPlayed)
+        setTopHighestAmount(highestAmount)
+        setLoading(false)
+        return
+      }
+
       // Primero obtener todos los prizes para tener el mapeo
       const { data: allPrizes, error: prizesError } = await supabase
         .from('prizes')
@@ -140,8 +274,8 @@ export function useBetsStats(options?: UseBetsStatsOptions) {
         filteredBetsItems = filteredBetsItems.filter(item => {
           const prizeInfo = prizesMap.get(item.prize_id)
           if (!prizeInfo?.lotteryId) return false
-          const isLola = prizeInfo.lotteryId.startsWith('lola-')
-          return queryOptions.lotteryType === 'lola' ? isLola : !isLola
+          const isLolaLottery = prizeInfo.lotteryId.startsWith('lola-')
+          return queryOptions.lotteryType === 'lola' ? isLolaLottery : !isLolaLottery
         })
       }
 

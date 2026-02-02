@@ -174,7 +174,10 @@ export function DashboardPage() {
     const toDate = endOfDay(appliedDateRange.to)
     return winners.filter(w => {
       const winnerDate = new Date(w.createdAt)
-      return isWithinInterval(winnerDate, { start: fromDate, end: toDate })
+      if (!isWithinInterval(winnerDate, { start: fromDate, end: toDate })) return false
+      const lotteryId = String(w.lotteryId || '')
+      if (lotteryId.startsWith('lola-')) return false
+      return true
     })
   }, [winners, appliedDateRange])
 

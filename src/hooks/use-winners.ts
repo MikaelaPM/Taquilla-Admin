@@ -68,19 +68,51 @@ export function useWinners(options?: UseWinnersOptions) {
 
       const { data: winnerItems, error: fetchError } = await query
 
+      // Consultar ganadores de Lola
+      let lolaQuery = supabase
+        .from('bets_item_lola_lottery')
+        .select('id, bets_id, user_id, lola_lottery_id, number, amount, status, created_at, prize')
+        .in('status', ['winner', 'paid'])
+        .order('created_at', { ascending: false })
+
+      if (startDate) {
+        lolaQuery = lolaQuery.gte('created_at', startDate)
+      }
+      if (endDate) {
+        lolaQuery = lolaQuery.lte('created_at', endDate)
+      }
+
+      if (visibleTaquillaIds && visibleTaquillaIds.length > 0) {
+        lolaQuery = lolaQuery.in('user_id', visibleTaquillaIds)
+      }
+
+      const { data: lolaWinnerItems, error: lolaFetchError } = await lolaQuery
+
       if (fetchError) {
         console.error('Error fetching winners:', fetchError)
         setError(fetchError.message)
         return
       }
 
-      if (!winnerItems || winnerItems.length === 0) {
+      if (lolaFetchError) {
+        console.error('Error fetching lola winners:', lolaFetchError)
+        setError(lolaFetchError.message)
+        return
+      }
+
+      const classicItems = winnerItems || []
+      const lolaItems = lolaWinnerItems || []
+
+      if (classicItems.length === 0 && lolaItems.length === 0) {
         setWinners([])
         return
       }
 
       // Obtener IDs únicos de usuarios para buscar nombres de taquillas
-      const userIds = [...new Set(winnerItems.map(w => w.user_id).filter(Boolean))]
+      const userIds = [...new Set([
+        ...classicItems.map(w => w.user_id),
+        ...lolaItems.map(w => w.user_id)
+      ].filter(Boolean))]
 
       // Obtener información de usuarios (taquillas)
       let usersMap = new Map<string, { name: string; email: string }>()
@@ -96,7 +128,7 @@ export function useWinners(options?: UseWinnersOptions) {
       }
 
       // Obtener IDs únicos de premios para buscar información del animal
-      const prizeIds = [...new Set(winnerItems.map(w => w.prize_id).filter(Boolean))]
+      const prizeIds = [...new Set(classicItems.map(w => w.prize_id).filter(Boolean))]
 
       // Obtener información de premios (animal_number, animal_name, lottery_id)
       let prizesMap = new Map<string, { animalNumber: string; animalName: string; lotteryId: string | null }>()
@@ -135,7 +167,7 @@ export function useWinners(options?: UseWinnersOptions) {
       }
 
       // Mapear los resultados
-      const mapped: Winner[] = winnerItems.map((item: any) => {
+      const mappedClassic: Winner[] = classicItems.map((item: any) => {
         const userInfo = usersMap.get(item.user_id) || { name: 'Desconocida', email: '' }
         const prizeInfo = prizesMap.get(item.prize_id) || { animalNumber: '??', animalName: 'Desconocido', lotteryId: null }
         const lotteryId = prizeInfo.lotteryId
@@ -160,7 +192,52 @@ export function useWinners(options?: UseWinnersOptions) {
         }
       })
 
-      setWinners(mapped)
+      // Obtener nombres de loterías Lola
+      const lolaLotteryIds = [...new Set(lolaItems.map(i => String(i.lola_lottery_id || '')).filter(Boolean))]
+      let lolaLotteriesMap = new Map<string, string>()
+      if (lolaLotteryIds.length > 0) {
+        const { data: lolaLotteries } = await supabase
+          .from('lola_lotteries')
+          .select('id, name')
+          .in('id', lolaLotteryIds.map(id => Number(id)).filter(n => Number.isFinite(n)))
+
+        if (lolaLotteries) {
+          lolaLotteriesMap = new Map(
+            lolaLotteries.map((l: any) => [String(l.id), l.name || `Lola #${l.id}`])
+          )
+        }
+      }
+
+      const mappedLola: Winner[] = lolaItems.map((item: any) => {
+        const userInfo = usersMap.get(item.user_id) || { name: 'Desconocida', email: '' }
+        const rawLolaId = String(item.lola_lottery_id || '')
+        const lotteryId = rawLolaId ? `lola-${rawLolaId}` : null
+        const lotteryName = rawLolaId ? (lolaLotteriesMap.get(rawLolaId) || `Lola #${rawLolaId}`) : 'Lola'
+        const animalNumber = String(item.number ?? '') || '??'
+        const animalName = animalNumber ? `Número ${animalNumber}` : 'Lola'
+
+        return {
+          id: item.id,
+          betsId: item.bets_id,
+          odile: item.user_id,
+          prizeId: null,
+          amount: Number(item.amount) || 0,
+          potentialWin: Number(item.prize) || 0,
+          status: item.status,
+          createdAt: item.created_at,
+          taquillaId: item.user_id,
+          taquillaName: userInfo.name,
+          taquillaEmail: userInfo.email,
+          animalNumber,
+          animalName,
+          lotteryId,
+          lotteryName
+        }
+      })
+
+      const combined = [...mappedClassic, ...mappedLola]
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      setWinners(combined)
     } catch (err) {
       console.error('Error in loadWinners:', err)
       setError('Error al cargar ganadores')
