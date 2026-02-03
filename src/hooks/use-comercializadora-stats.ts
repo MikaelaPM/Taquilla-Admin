@@ -202,7 +202,7 @@ export function useComercializadoraStats(options: UseComercializadoraStatsOption
       // Sum bets.amount where user_id is in taquillas and status is active (excluir anulados)
       // ============================================
       const { data: salesData, error: salesError } = await supabase
-        .from('bets')
+        .from('bets_item_lottery_clasic')
         .select('user_id, amount, created_at')
         .in('user_id', allTaquillaIds)
         .gte('created_at', queryStart)
