@@ -105,7 +105,7 @@ export function useSalesStats(options?: UseSalesStatsOptions) {
 
       // Ventas del día (excluyendo jugadas canceladas)
       let todayQuery = supabase
-        .from('bets')
+        .from('bets_item_lottery_clasic')
         .select('id, amount, user_id')
         .gte('created_at', todayStart)
         .lte('created_at', todayEnd)
@@ -175,7 +175,7 @@ export function useSalesStats(options?: UseSalesStatsOptions) {
 
       // Ventas de la semana (excluyendo jugadas canceladas)
       let weekQuery = supabase
-        .from('bets')
+        .from('bets_item_lottery_clasic')
         .select('id, amount, user_id')
         .gte('created_at', weekStart)
         .lte('created_at', todayEnd)
@@ -226,7 +226,7 @@ export function useSalesStats(options?: UseSalesStatsOptions) {
 
       // Ventas del mes (excluyendo jugadas canceladas)
       let monthQuery = supabase
-        .from('bets')
+        .from('bets_item_lottery_clasic')
         .select('id, amount, user_id')
         .gte('created_at', monthStart)
         .lte('created_at', todayEnd)

@@ -183,7 +183,7 @@ function ExpandableRow({ entity, level, dateFrom, dateTo, allUsers, showProfitCo
           })
         } else {
           const { data: salesData } = await supabase
-            .from('bets')
+            .from('bets_item_lottery_clasic')
             .select('user_id, amount')
             .in('user_id', taquillaIds)
             .gte('created_at', queryStart)

@@ -105,7 +105,7 @@ export function useTaquillaStats(options: UseTaquillaStatsOptions) {
       // Sum bets.amount where user_id is in taquillas (excluir anulados)
       // ============================================
       const { data: salesData, error: salesError } = await supabase
-        .from('bets')
+        .from('bets_item_lottery_clasic')
         .select('user_id, amount, created_at')
         .in('user_id', taquillaIds)
         .gte('created_at', queryStart)
