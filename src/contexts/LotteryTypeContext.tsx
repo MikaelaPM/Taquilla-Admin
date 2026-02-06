@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
 
-export type LotteryType = 'mikaela' | 'lola'
+export type LotteryType = 'mikaela' | 'lola' | 'pollo_lleno'
 
 type LotteryTypeContextValue = {
   lotteryType: LotteryType
@@ -11,7 +11,9 @@ const STORAGE_KEY = 'taquilla-admin:lottery-type'
 const DEFAULT_VALUE: LotteryType = 'mikaela'
 
 const normalizeLotteryType = (value: unknown): LotteryType => {
-  return value === 'lola' ? 'lola' : 'mikaela'
+  if (value === 'lola') return 'lola'
+  if (value === 'pollo_lleno') return 'pollo_lleno'
+  return 'mikaela'
 }
 
 const readStoredLotteryType = (): LotteryType => {

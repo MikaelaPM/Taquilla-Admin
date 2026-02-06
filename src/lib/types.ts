@@ -74,6 +74,13 @@ export interface DailyResultLola {
   totalRaised: number
 }
 
+export interface DailyResultPolloLleno {
+  id: string
+  numbers: number[]
+  resultDate: string
+  createdAt: string
+}
+
 export interface Pot {
   name: string
   percentage: number

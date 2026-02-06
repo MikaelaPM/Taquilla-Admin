@@ -11,6 +11,7 @@ import { useApp } from '@/contexts/AppContext'
 import { useLotteryTypePreference } from '@/contexts/LotteryTypeContext'
 import { useBetsStats } from '@/hooks/use-bets-stats'
 import { useSalesStatsLola } from '@/hooks/use-sales-stats-lola'
+import { useSalesStatsPolloLleno } from '@/hooks/use-sales-stats-pollo-lleno'
 import { useComercializadoraStats } from '@/hooks/use-comercializadora-stats'
 import { useAgencyStats } from '@/hooks/use-agency-stats'
 import { useTaquillaStats } from '@/hooks/use-taquilla-stats'
@@ -40,9 +41,11 @@ export function ReportsPage() {
   const {
     dailyResults,
     dailyResultsLola,
+    dailyResultsPolloLleno,
     dailyResultsLoading,
     loadDailyResults,
     loadDailyResultsLola,
+    loadDailyResultsPolloLleno,
     lotteries,
     winners,
     users,
@@ -58,10 +61,28 @@ export function ReportsPage() {
   const { topMostPlayed, topHighestAmount, loading: betsStatsLoading, loadBetsStats } = useBetsStats({ visibleTaquillaIds })
 
   const isLolaLotteryId = (lotteryId: string) => lotteryId.startsWith('lola-')
+  const polloLlenoLottery = useMemo(() => ({
+    id: 'pollo-lleno',
+    name: 'Pollo Lleno',
+    openingTime: '00:00',
+    closingTime: '20:00',
+    drawTime: '20:00',
+    isActive: true,
+    playsTomorrow: false,
+    prizes: [],
+    createdAt: ''
+  }), [])
+
   const activeLotteriesForType = useMemo(() => {
     const active = lotteries.filter(l => l.isActive)
-    return active.filter(l => (lotteryType === 'lola' ? isLolaLotteryId(l.id) : !isLolaLotteryId(l.id)))
-  }, [lotteries, lotteryType])
+    if (lotteryType === 'lola') {
+      return active.filter(l => isLolaLotteryId(l.id))
+    }
+    if (lotteryType === 'pollo_lleno') {
+      return [polloLlenoLottery]
+    }
+    return active.filter(l => !isLolaLotteryId(l.id))
+  }, [lotteries, lotteryType, polloLlenoLottery])
 
   // Determinar tipo de usuario
   const isAdmin = currentUser?.userType === 'admin' || !currentUser?.userType
@@ -113,6 +134,13 @@ export function ReportsPage() {
     enabled: lotteryType === 'lola'
   })
 
+  const { stats: polloSalesStats, refresh: refreshPolloSales } = useSalesStatsPolloLleno({
+    visibleTaquillaIds,
+    dateFrom: appliedDateRange.from,
+    dateTo: appliedDateRange.to,
+    enabled: lotteryType === 'pollo_lleno'
+  })
+
   const [periodFilter, setPeriodFilter] = useState<'today' | 'week' | 'month' | 'custom'>('month')
   const [selectedLottery, setSelectedLottery] = useState<string>('all')
 
@@ -137,18 +165,26 @@ export function ReportsPage() {
 
   // Filtrar resultados por período usando dateRange
   const filteredResults = useMemo(() => {
-    const list = lotteryType === 'lola' ? dailyResultsLola : dailyResults
+    const list = lotteryType === 'lola'
+      ? dailyResultsLola
+      : lotteryType === 'pollo_lleno'
+      ? dailyResultsPolloLleno
+      : dailyResults
     return list.filter(result => {
-      const resultDate = parseISO(result.resultDate)
+      const resultDate = parseISO((result as any).resultDate)
 
       // Filtro por tipo de lotería (Mikaela vs Lola)
       const matchesType = lotteryType === 'lola'
-        ? result.lotteryId.startsWith('lola-')
-        : !result.lotteryId.startsWith('lola-')
+        ? (result as any).lotteryId?.startsWith('lola-')
+        : lotteryType === 'pollo_lleno'
+        ? true
+        : !(result as any).lotteryId?.startsWith('lola-')
       if (!matchesType) return false
 
       // Filtro por lotería
-      if (selectedLottery !== 'all' && result.lotteryId !== selectedLottery) {
+      if (lotteryType === 'pollo_lleno') {
+        if (selectedLottery !== 'all' && selectedLottery !== 'pollo-lleno') return false
+      } else if (selectedLottery !== 'all' && (result as any).lotteryId !== selectedLottery) {
         return false
       }
 
@@ -161,6 +197,7 @@ export function ReportsPage() {
 
   // Filtrar ganadores por período usando dateRange
   const filteredWinners = useMemo(() => {
+    if (lotteryType === 'pollo_lleno') return []
     return winners.filter(winner => {
       const winnerDate = new Date(winner.createdAt)
 
@@ -208,13 +245,21 @@ export function ReportsPage() {
     let totalCommissions = 0
     let totalBalance = 0
 
-    if (lotteryType === 'lola') {
+      if (lotteryType === 'lola') {
       totalSales = lolaSalesStats.rangeSales
       totalPrizes = filteredWinners.reduce((sum, w) => sum + w.potentialWin, 0)
       totalCommissions = lolaSalesStats.rangeTaquillaCommissions
       totalBalance = totalSales - totalPrizes - totalCommissions
       return { totalSales, totalPrizes, totalCommissions, totalBalance }
     }
+
+      if (lotteryType === 'pollo_lleno') {
+        totalSales = polloSalesStats.rangeSales
+        totalPrizes = polloSalesStats.rangePrizes
+        totalCommissions = polloSalesStats.rangeTaquillaCommissions
+        totalBalance = totalSales - totalPrizes - totalCommissions
+        return { totalSales, totalPrizes, totalCommissions, totalBalance }
+      }
 
     // Seleccionar el hook correcto según el tipo de usuario
     if (isAdmin && comercializadoraStats && comercializadoraStats.length > 0) {
@@ -316,7 +361,7 @@ export function ReportsPage() {
     }
 
     return { totalSales, totalPrizes, totalCommissions, totalBalance }
-  }, [lotteryType, lolaSalesStats, filteredWinners, isAdmin, isComercializadora, isSubdistribuidor, isAgencia, comercializadoraStats, agencyStats, taquillaStats, periodFilter, currentUser, comercializadoras, subdistribuidores, agencies])
+  }, [lotteryType, lolaSalesStats, polloSalesStats, filteredWinners, isAdmin, isComercializadora, isSubdistribuidor, isAgencia, comercializadoraStats, agencyStats, taquillaStats, periodFilter, currentUser, comercializadoras, subdistribuidores, agencies])
 
   // Estadísticas principales - usando datos filtrados por taquillas visibles
   const stats = useMemo(() => {
@@ -347,10 +392,13 @@ export function ReportsPage() {
         })
     )
     // Contar cuántos resultados filtrados tienen ganadores de las taquillas visibles
-    const resultsWithWinners = filteredResults.filter(r => {
-      const resultDate = r.resultDate.split('T')[0]
-      return resultsWithWinnersSet.has(`${r.lotteryId}-${resultDate}`)
-    }).length
+    const resultsWithWinners = lotteryType === 'pollo_lleno'
+      ? 0
+      : filteredResults.filter(r => {
+          const resultDate = (r as any).resultDate.split('T')[0]
+          const lotteryId = (r as any).lotteryId
+          return resultsWithWinnersSet.has(`${lotteryId}-${resultDate}`)
+        }).length
     const averagePayout = totalWinningBets > 0 ? totalPayout / totalWinningBets : 0
 
     return {
@@ -508,9 +556,12 @@ export function ReportsPage() {
   const handleRefresh = () => {
     loadDailyResults()
     loadDailyResultsLola()
+    loadDailyResultsPolloLleno()
     // Refrescar stats según el tipo de usuario
     if (lotteryType === 'lola') {
       refreshLolaSales()
+    } else if (lotteryType === 'pollo_lleno') {
+      refreshPolloSales()
     } else if (isAdmin) {
       refreshComercializadoraStats()
     } else if (isComercializadora) {

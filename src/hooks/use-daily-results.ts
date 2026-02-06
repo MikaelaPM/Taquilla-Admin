@@ -1,16 +1,18 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
-import { DailyResult, DailyResultLola } from '@/lib/types'
+import { DailyResult, DailyResultLola, DailyResultPolloLleno } from '@/lib/types'
 import { parseISO, startOfDay, endOfDay } from 'date-fns'
 
 export function useDailyResults() {
   const [dailyResults, setDailyResults] = useState<DailyResult[]>([])
   const [dailyResultsLola, setDailyResultsLola] = useState<DailyResultLola[]>([])
+  const [dailyResultsPolloLleno, setDailyResultsPolloLleno] = useState<DailyResultPolloLleno[]>([])
   const [loadingClassic, setLoadingClassic] = useState(true)
   const [loadingLola, setLoadingLola] = useState(true)
+  const [loadingPollo, setLoadingPollo] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const loading = loadingClassic || loadingLola
+  const loading = loadingClassic || loadingLola || loadingPollo
 
   const getDatePart = (value: unknown): string => {
     const s = String(value ?? '')
@@ -169,6 +171,49 @@ export function useDailyResults() {
       setError('Error al cargar resultados diarios (Lola)')
     } finally {
       setLoadingLola(false)
+    }
+  }, [])
+
+  const loadDailyResultsPolloLleno = useCallback(async (startDate?: string, endDate?: string) => {
+    try {
+      setLoadingPollo(true)
+      setError(null)
+
+      let query = supabase
+        .from('daily_results_pollo_lleno')
+        .select('id, numbers, result_date, created_at')
+        .order('result_date', { ascending: false })
+
+      if (startDate) {
+        query = query.gte('result_date', startDate)
+      }
+      if (endDate) {
+        query = query.lte('result_date', endDate)
+      }
+
+      const { data, error: fetchError } = await query
+
+      if (fetchError) {
+        console.error('Error fetching daily results pollo lleno:', fetchError)
+        setError(fetchError.message)
+        return
+      }
+
+      const mapped: DailyResultPolloLleno[] = (data || []).map((item: any) => ({
+        id: String(item.id ?? ''),
+        numbers: Array.isArray(item.numbers)
+          ? item.numbers.map((n: any) => Number(n)).filter((n: number) => Number.isFinite(n))
+          : [],
+        resultDate: getDatePart(item.result_date) || getDatePart(item.created_at),
+        createdAt: item.created_at
+      }))
+
+      setDailyResultsPolloLleno(mapped)
+    } catch (err) {
+      console.error('Error in loadDailyResultsPolloLleno:', err)
+      setError('Error al cargar resultados diarios (Pollo Lleno)')
+    } finally {
+      setLoadingPollo(false)
     }
   }, [])
 
@@ -454,6 +499,48 @@ export function useDailyResults() {
     }
   }, [loadDailyResultsLola])
 
+  const createDailyResultPolloLleno = useCallback(async (
+    numbers: number[],
+    resultDate: string
+  ): Promise<boolean> => {
+    try {
+      const normalizedResultDate = getDatePart(resultDate)
+      if (!normalizedResultDate) {
+        console.error('Invalid Pollo Lleno resultDate (expected YYYY-MM-DD):', resultDate)
+        return false
+      }
+
+      const normalizedNumbers = (numbers || [])
+        .map((n) => Number(n))
+        .filter((n) => Number.isFinite(n))
+
+      const uniqueNumbers = Array.from(new Set(normalizedNumbers))
+        .filter((n) => n >= 1 && n <= 40)
+        .sort((a, b) => a - b)
+
+      if (uniqueNumbers.length !== 6) {
+        console.error('Invalid Pollo Lleno numbers (expected 6 unique numbers 1-40):', numbers)
+        return false
+      }
+
+      const { error: insertError } = await supabase.rpc('create_daily_result_pollo_lleno', {
+        p_numbers: uniqueNumbers,
+        p_result_date: normalizedResultDate
+      })
+
+      if (insertError) {
+        console.error('Error creating daily result pollo lleno:', insertError)
+        return false
+      }
+
+      await loadDailyResultsPolloLleno()
+      return true
+    } catch (err) {
+      console.error('Error in createDailyResultPolloLleno:', err)
+      return false
+    }
+  }, [loadDailyResultsPolloLleno])
+
   const updateDailyResult = useCallback(async (
     id: string,
     updates: Partial<{ prizeId: string; totalToPay: number; totalRaised: number }>
@@ -510,6 +597,11 @@ export function useDailyResults() {
     const target = getDatePart(date)
     return dailyResultsLola.find(r => r.lotteryId === lotteryId && getDatePart(r.resultDate) === target)
   }, [dailyResultsLola])
+
+  const getResultForLotteryAndDatePolloLleno = useCallback((date: string): DailyResultPolloLleno | undefined => {
+    const target = getDatePart(date)
+    return dailyResultsPolloLleno.find(r => getDatePart(r.resultDate) === target)
+  }, [dailyResultsPolloLleno])
 
   const getResultsForWeek = useCallback((weekStart: string, weekEnd: string): DailyResult[] => {
     return dailyResults.filter(r => r.resultDate >= weekStart && r.resultDate <= weekEnd)
@@ -654,30 +746,109 @@ export function useDailyResults() {
     }
   }, [])
 
+  const getWinnersForResultPolloLleno = useCallback(async (
+    resultDate: string,
+    numbers: number[]
+  ): Promise<Array<{
+    id: string
+    amount: number
+    potentialWin: number
+    taquillaId: string
+    taquillaName: string
+    createdAt: string
+  }>> => {
+    try {
+      const normalizedResultDate = getDatePart(resultDate)
+      if (!normalizedResultDate) return []
+
+      const dateObj = parseISO(normalizedResultDate)
+      const dayStart = startOfDay(dateObj).toISOString()
+      const dayEnd = endOfDay(dateObj).toISOString()
+
+      const keyGamble = (numbers || [])
+        .map((n) => Number(n))
+        .filter((n) => Number.isFinite(n))
+        .sort((a, b) => a - b)
+        .map((n) => String(n).padStart(2, '0'))
+        .join('')
+
+      if (!keyGamble) return []
+
+      const { data: winningItems, error: itemsError } = await supabase
+        .from('bets_item_pollo_lleno')
+        .select('id, user_id, amount, prize, created_at, status, key_gamble')
+        .eq('key_gamble', keyGamble)
+        .neq('status', 'cancelled')
+        .gte('created_at', dayStart)
+        .lte('created_at', dayEnd)
+
+      if (itemsError || !winningItems || winningItems.length === 0) {
+        return []
+      }
+
+      const userIds = [...new Set(winningItems.map(w => w.user_id).filter(Boolean))]
+
+      let usersMap = new Map<string, string>()
+      if (userIds.length > 0) {
+        const { data: users } = await supabase
+          .from('users')
+          .select('id, name')
+          .in('id', userIds)
+
+        if (users) {
+          usersMap = new Map(users.map(u => [u.id, u.name]))
+        }
+      }
+
+      return winningItems.map(item => {
+        const taquillaId = item.user_id || ''
+        const taquillaName = usersMap.get(taquillaId) || 'Desconocida'
+
+        return {
+          id: item.id,
+          amount: Number(item.amount) || 0,
+          potentialWin: Number(item.prize) || 0,
+          taquillaId,
+          taquillaName,
+          createdAt: item.created_at || ''
+        }
+      })
+    } catch (err) {
+      console.error('Error in getWinnersForResultPolloLleno:', err)
+      return []
+    }
+  }, [])
+
   useEffect(() => {
     Promise.all([
       loadDailyResults(),
-      loadDailyResultsLola()
+      loadDailyResultsLola(),
+      loadDailyResultsPolloLleno()
     ]).catch((err) => {
       console.error('Error loading daily results (classic + lola):', err)
     })
-  }, [loadDailyResults, loadDailyResultsLola])
+  }, [loadDailyResults, loadDailyResultsLola, loadDailyResultsPolloLleno])
 
   return {
     dailyResults,
     dailyResultsLola,
+    dailyResultsPolloLleno,
     loading,
     error,
     loadDailyResults,
     loadDailyResultsLola,
+    loadDailyResultsPolloLleno,
     createDailyResult,
     createDailyResultLola,
+    createDailyResultPolloLleno,
     updateDailyResult,
     deleteDailyResult,
     getResultForLotteryAndDate,
     getResultForLotteryAndDateLola,
+    getResultForLotteryAndDatePolloLleno,
     getResultsForWeek,
     getWinnersForResult,
-    getWinnersForResultLola
+    getWinnersForResultLola,
+    getWinnersForResultPolloLleno
   }
 }

@@ -1,5 +1,5 @@
 import { createContext, useContext, ReactNode, useMemo } from 'react'
-import { Bet, Lottery, User, Role, ApiKey, DailyResult, DailyResultLola, Pot, Transfer } from '@/lib/types'
+import { Bet, Lottery, User, Role, ApiKey, DailyResult, DailyResultLola, DailyResultPolloLleno, Pot, Transfer } from '@/lib/types'
 import { useSupabaseAuth } from '@/hooks/use-supabase-auth'
 import { useSupabaseRoles } from '@/hooks/use-supabase-roles'
 import { useSupabaseUsers } from '@/hooks/use-supabase-users'
@@ -73,15 +73,19 @@ interface AppContextType {
   // Daily Results
   dailyResults: DailyResult[]
   dailyResultsLola: DailyResultLola[]
+  dailyResultsPolloLleno: DailyResultPolloLleno[]
   dailyResultsLoading: boolean
   loadDailyResults: (startDate?: string, endDate?: string) => Promise<void>
   loadDailyResultsLola: (startDate?: string, endDate?: string) => Promise<void>
+  loadDailyResultsPolloLleno: (startDate?: string, endDate?: string) => Promise<void>
   createDailyResult: (lotteryId: string, prizeId: string, resultDate: string) => Promise<boolean>
   createDailyResultLola: (lotteryId: string, number: string, totalToPay: number, totalRaised: number, resultDate: string) => Promise<boolean>
+  createDailyResultPolloLleno: (numbers: number[], resultDate: string) => Promise<boolean>
   updateDailyResult: (id: string, updates: Partial<{ prizeId: string; totalToPay: number; totalRaised: number }>) => Promise<boolean>
   deleteDailyResult: (id: string) => Promise<boolean>
   getResultForLotteryAndDate: (lotteryId: string, date: string) => DailyResult | undefined
   getResultForLotteryAndDateLola: (lotteryId: string, date: string) => DailyResultLola | undefined
+  getResultForLotteryAndDatePolloLleno: (date: string) => DailyResultPolloLleno | undefined
   getWinnersForResult: (prizeId: string, resultDate: string) => Promise<Array<{
     id: string
     amount: number
@@ -91,6 +95,14 @@ interface AppContextType {
     createdAt: string
   }>>
   getWinnersForResultLola: (lolaLotteryId: string, resultDate: string) => Promise<Array<{
+    id: string
+    amount: number
+    potentialWin: number
+    taquillaId: string
+    taquillaName: string
+    createdAt: string
+  }>>
+  getWinnersForResultPolloLleno: (resultDate: string, numbers: number[]) => Promise<Array<{
     id: string
     amount: number
     potentialWin: number
@@ -240,14 +252,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     loadDailyResults,
     dailyResultsLola,
     loadDailyResultsLola,
+    dailyResultsPolloLleno,
+    loadDailyResultsPolloLleno,
     createDailyResult,
     createDailyResultLola,
+    createDailyResultPolloLleno,
     updateDailyResult,
     deleteDailyResult,
     getResultForLotteryAndDate,
     getResultForLotteryAndDateLola,
+    getResultForLotteryAndDatePolloLleno,
     getWinnersForResult,
-    getWinnersForResultLola
+    getWinnersForResultLola,
+    getWinnersForResultPolloLleno
   } = useDailyResults()
 
   // Bets
@@ -757,17 +774,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     dailyResults: dailyResults || [],
     dailyResultsLola: dailyResultsLola || [],
+    dailyResultsPolloLleno: dailyResultsPolloLleno || [],
     dailyResultsLoading,
     loadDailyResults,
     loadDailyResultsLola,
+    loadDailyResultsPolloLleno,
     createDailyResult,
     createDailyResultLola,
+    createDailyResultPolloLleno,
     updateDailyResult,
     deleteDailyResult,
     getResultForLotteryAndDate,
     getResultForLotteryAndDateLola,
+    getResultForLotteryAndDatePolloLleno,
     getWinnersForResult,
     getWinnersForResultLola,
+    getWinnersForResultPolloLleno,
 
     bets: bets || [],
     betsLoading,

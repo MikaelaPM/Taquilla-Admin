@@ -41,7 +41,7 @@ export function useBetsStats(options?: UseBetsStatsOptions) {
     startDate?: string
     endDate?: string
     lotteryId?: string
-    lotteryType?: 'mikaela' | 'lola'
+    lotteryType?: 'mikaela' | 'lola' | 'pollo_lleno'
   }) => {
     setLoading(true)
     setError(null)
@@ -58,6 +58,104 @@ export function useBetsStats(options?: UseBetsStatsOptions) {
 
     try {
       const isLola = queryOptions?.lotteryType === 'lola'
+      const isPollo = queryOptions?.lotteryType === 'pollo_lleno'
+
+      if (isPollo) {
+        let polloQuery = supabase
+          .from('bets_item_pollo_lleno')
+          .select('*')
+          .neq('status', 'cancelled')
+          .order('created_at', { ascending: false })
+          .limit(10000)
+
+        if (queryOptions?.startDate) {
+          polloQuery = polloQuery.gte('created_at', queryOptions.startDate)
+        }
+        if (queryOptions?.endDate) {
+          polloQuery = polloQuery.lte('created_at', queryOptions.endDate)
+        }
+
+        if (options?.visibleTaquillaIds && options.visibleTaquillaIds.length > 0) {
+          polloQuery = polloQuery.in('user_id', options.visibleTaquillaIds)
+        }
+
+        const { data: polloItems, error: polloError } = await polloQuery
+
+        if (polloError) {
+          console.error('Error fetching pollo lleno items:', polloError)
+          setError(polloError.message)
+          setLoading(false)
+          return
+        }
+
+        const numberStats = new Map<string, BetNumberStats>()
+
+        ;(polloItems || []).forEach((item: any) => {
+          const keyGamble = String(item.key_gamble ?? '')
+          const numbers = Array.isArray(item.numbers)
+            ? item.numbers.map((n: any) => String(n).padStart(2, '0')).join('-')
+            : ''
+          const key = keyGamble || numbers || '??'
+
+          const current = numberStats.get(key) || {
+            animalNumber: key,
+            animalName: key ? 'Combinación' : 'Pollo Lleno',
+            timesPlayed: 0,
+            totalAmount: 0,
+            totalPotentialWin: 0,
+            lotteryBreakdown: new Map()
+          }
+
+          current.timesPlayed += 1
+          current.totalAmount += Number(item.amount) || 0
+          current.totalPotentialWin += Number(item.prize) || 0
+
+          const lotteryId = 'pollo-lleno'
+          const lotteryData = current.lotteryBreakdown.get(lotteryId) || {
+            lotteryId,
+            lotteryName: 'Pollo Lleno',
+            count: 0,
+            amount: 0
+          }
+
+          lotteryData.count += 1
+          lotteryData.amount += Number(item.amount) || 0
+          current.lotteryBreakdown.set(lotteryId, lotteryData)
+
+          numberStats.set(key, current)
+        })
+
+        const mostPlayed = Array.from(numberStats.values())
+          .sort((a, b) => b.timesPlayed - a.timesPlayed)
+          .slice(0, 10)
+          .map((item) => ({
+            number: item.animalNumber,
+            animalName: item.animalName,
+            timesPlayed: item.timesPlayed,
+            lotteries: Array.from(item.lotteryBreakdown.values()).map((l) => ({
+              lotteryId: l.lotteryId,
+              lotteryName: l.lotteryName,
+              count: l.count
+            }))
+          }))
+
+        const highestAmount = Array.from(numberStats.values())
+          .sort((a, b) => b.totalAmount - a.totalAmount)
+          .slice(0, 10)
+          .map((item) => ({
+            number: item.animalNumber,
+            animalName: item.animalName,
+            totalAmount: item.totalAmount,
+            timesPlayed: item.timesPlayed,
+            avgAmount: item.timesPlayed > 0 ? item.totalAmount / item.timesPlayed : 0,
+            totalPotentialWin: item.totalPotentialWin
+          }))
+
+        setTopMostPlayed(mostPlayed)
+        setTopHighestAmount(highestAmount)
+        setLoading(false)
+        return
+      }
 
       if (isLola) {
         const toLolaDbId = (lotteryId?: string) => {

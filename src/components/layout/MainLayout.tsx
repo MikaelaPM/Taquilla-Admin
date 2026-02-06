@@ -186,6 +186,7 @@ export function MainLayout() {
                   <SelectContent>
                     <SelectItem value="mikaela">Mikaela</SelectItem>
                     <SelectItem value="lola">Lola</SelectItem>
+                    <SelectItem value="pollo_lleno">Pollo Lleno</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

@@ -13,7 +13,7 @@ import { toast } from 'sonner'
 import { format, startOfWeek, endOfWeek, addDays, addWeeks, subWeeks, isToday, isBefore, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { CaretLeft, CaretRight, Target, CheckCircle, Calendar, Warning, Clock, Trophy, CurrencyDollar, Users, Storefront, SpinnerGap } from '@phosphor-icons/react'
-import { ANIMALS, Lottery, DailyResult, DailyResultLola } from '@/lib/types'
+import { ANIMALS, Lottery, DailyResult, DailyResultLola, DailyResultPolloLleno } from '@/lib/types'
 
 const PLACEHOLDER_ANIMAL_IMAGE =
   'data:image/svg+xml;utf8,' +
@@ -78,14 +78,16 @@ interface WinnerItem {
 export function DrawsPage() {
   const {
     lotteries,
-    dailyResults,
     dailyResultsLoading,
     createDailyResult,
     createDailyResultLola,
+    createDailyResultPolloLleno,
     getResultForLotteryAndDate,
     getResultForLotteryAndDateLola,
+    getResultForLotteryAndDatePolloLleno,
     getWinnersForResult,
-    getWinnersForResultLola
+    getWinnersForResultLola,
+    getWinnersForResultPolloLleno
   } = useApp()
 
   const { lotteryType } = useLotteryTypePreference()
@@ -105,6 +107,8 @@ export function DrawsPage() {
   const [loadingWinners, setLoadingWinners] = useState(false)
   const [lolaWinners, setLolaWinners] = useState<WinnerItem[]>([])
   const [lolaLoadingWinners, setLolaLoadingWinners] = useState(false)
+  const [polloWinners, setPolloWinners] = useState<WinnerItem[]>([])
+  const [polloLoadingWinners, setPolloLoadingWinners] = useState(false)
   const [lolaLoadDialogOpen, setLolaLoadDialogOpen] = useState(false)
   const [selectedLolaLottery, setSelectedLolaLottery] = useState<Lottery | null>(null)
   const [selectedLolaDate, setSelectedLolaDate] = useState<string>('')
@@ -115,7 +119,21 @@ export function DrawsPage() {
   const [lolaConfirmOpen, setLolaConfirmOpen] = useState(false)
   const [lolaSaving, setLolaSaving] = useState(false)
 
+  const [polloLoadDialogOpen, setPolloLoadDialogOpen] = useState(false)
+  const [selectedPolloDate, setSelectedPolloDate] = useState<string>('')
+  const [selectedPolloNumbers, setSelectedPolloNumbers] = useState<string[]>([])
+  const [polloConfirmOpen, setPolloConfirmOpen] = useState(false)
+  const [polloSaving, setPolloSaving] = useState(false)
+  const [polloResultDetailOpen, setPolloResultDetailOpen] = useState(false)
+  const [selectedPolloResultDetail, setSelectedPolloResultDetail] = useState<DailyResultPolloLleno | null>(null)
+
   const isLolaLottery = useCallback((lottery: Lottery) => lottery.id.startsWith('lola-'), [])
+  const isPolloLlenoLottery = useCallback((lottery: Lottery) => lottery.id === 'pollo-lleno', [])
+
+  const polloNumbers = useMemo(
+    () => Array.from({ length: 40 }, (_, i) => String(i + 1).padStart(2, '0')),
+    []
+  )
 
   // Loterías activas ordenadas por hora de jugada
   const activeLotteries = useMemo(() => {
@@ -128,9 +146,27 @@ export function DrawsPage() {
       })
   }, [lotteries])
 
+  const polloLlenoLottery = useMemo<Lottery>(() => ({
+    id: 'pollo-lleno',
+    name: 'Pollo Lleno',
+    openingTime: '00:00',
+    closingTime: '20:00',
+    drawTime: '20:00',
+    isActive: true,
+    playsTomorrow: false,
+    prizes: [],
+    createdAt: ''
+  }), [])
+
   const visibleLotteries = useMemo(() => {
-    return activeLotteries.filter((l) => (lotteryType === 'lola' ? isLolaLottery(l) : !isLolaLottery(l)))
-  }, [activeLotteries, lotteryType, isLolaLottery])
+    if (lotteryType === 'lola') {
+      return activeLotteries.filter((l) => isLolaLottery(l))
+    }
+    if (lotteryType === 'pollo_lleno') {
+      return [polloLlenoLottery]
+    }
+    return activeLotteries.filter((l) => !isLolaLottery(l))
+  }, [activeLotteries, lotteryType, isLolaLottery, polloLlenoLottery])
 
   useEffect(() => {
     setSelectedCell(null)
@@ -142,6 +178,8 @@ export function DrawsPage() {
     setLoadingWinners(false)
     setLolaWinners([])
     setLolaLoadingWinners(false)
+    setPolloWinners([])
+    setPolloLoadingWinners(false)
 
     setLolaResultDetailOpen(false)
     setSelectedLolaResultDetail(null)
@@ -154,6 +192,14 @@ export function DrawsPage() {
     setLolaTotalFrom('')
     setLolaTotalTo('')
     setLolaConfirmOpen(false)
+
+    setPolloLoadDialogOpen(false)
+    setSelectedPolloDate('')
+    setSelectedPolloNumbers([])
+    setPolloConfirmOpen(false)
+    setPolloSaving(false)
+    setPolloResultDetailOpen(false)
+    setSelectedPolloResultDetail(null)
   }, [lotteryType])
 
   const handleLolaResultClick = useCallback(async (result: DailyResultLola) => {
@@ -173,6 +219,25 @@ export function DrawsPage() {
       }
     }
   }, [getWinnersForResultLola])
+
+  const handlePolloResultClick = useCallback((result: DailyResultPolloLleno) => {
+    setSelectedPolloResultDetail(result)
+    setPolloWinners([])
+    setPolloResultDetailOpen(true)
+
+    setPolloLoadingWinners(true)
+    getWinnersForResultPolloLleno(result.resultDate, result.numbers)
+      .then((data) => setPolloWinners(data))
+      .catch((err) => console.error('Error loading pollo lleno winners:', err))
+      .finally(() => setPolloLoadingWinners(false))
+  }, [getWinnersForResultPolloLleno])
+
+  const openPolloLoadDialog = (dateStr: string) => {
+    setSelectedPolloDate(dateStr)
+    setSelectedPolloNumbers([])
+    setPolloConfirmOpen(false)
+    setPolloLoadDialogOpen(true)
+  }
 
   const parseMatrizItem = (raw: string) => {
     const cleaned = (raw || '').trim().replace(/^\(/, '').replace(/\)$/, '')
@@ -344,11 +409,13 @@ export function DrawsPage() {
   const handleCellClick = (lotteryId: string, date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd')
 
-    const lottery = lotteries.find(l => l.id === lotteryId)
+    const lottery = lotteries.find(l => l.id === lotteryId) || (lotteryId === 'pollo-lleno' ? polloLlenoLottery : null)
     if (!lottery) return
 
     const existingResult = isLolaLottery(lottery)
       ? getResultForLotteryAndDateLola(lotteryId, dateStr)
+      : isPolloLlenoLottery(lottery)
+      ? getResultForLotteryAndDatePolloLleno(dateStr)
       : getResultForLotteryAndDate(lotteryId, dateStr)
 
     // Si ya hay resultado, no permitir editar
@@ -364,6 +431,11 @@ export function DrawsPage() {
 
     if (isLolaLottery(lottery)) {
       openLolaLoadDialog(lottery, dateStr)
+      return
+    }
+
+    if (isPolloLlenoLottery(lottery)) {
+      openPolloLoadDialog(dateStr)
       return
     }
 
@@ -418,6 +490,30 @@ export function DrawsPage() {
     const dateStr = format(date, 'yyyy-MM-dd')
     const lottery = lotteries.find(l => l.id === lotteryId)
     const isLola = !!lottery && isLolaLottery(lottery)
+    const isPollo = (!!lottery && isPolloLlenoLottery(lottery)) || lotteryId === 'pollo-lleno'
+
+    if (isPollo) {
+      const polloResult = getResultForLotteryAndDatePolloLleno(dateStr)
+      if (polloResult) {
+        const numbersLabel = polloResult.numbers
+          .slice()
+          .sort((a, b) => a - b)
+          .map((n) => String(n).padStart(2, '0'))
+          .join('-')
+        return {
+          hasResult: true,
+          number: numbersLabel,
+          name: 'Pollo Lleno',
+          hasWinners: false,
+          totalToPay: 0,
+          totalRaised: 0,
+          result: null,
+          polloResult
+        }
+      }
+
+      return { hasResult: false, number: '', name: '', hasWinners: false, totalToPay: 0, totalRaised: 0, result: null, polloResult: null }
+    }
 
     if (isLola) {
       const lolaResult = getResultForLotteryAndDateLola(lotteryId, dateStr)
@@ -429,11 +525,12 @@ export function DrawsPage() {
           hasWinners: (lolaResult.totalToPay || 0) > 0,
           totalToPay: lolaResult.totalToPay || 0,
           totalRaised: lolaResult.totalRaised || 0,
-          result: null
+          result: null,
+          polloResult: null
         }
       }
 
-      return { hasResult: false, number: '', name: '', hasWinners: false, totalToPay: 0, totalRaised: 0, result: null }
+      return { hasResult: false, number: '', name: '', hasWinners: false, totalToPay: 0, totalRaised: 0, result: null, polloResult: null }
     }
 
     const result = getResultForLotteryAndDate(lotteryId, dateStr)
@@ -446,11 +543,12 @@ export function DrawsPage() {
         hasWinners: (result.totalToPay || 0) > 0,
         totalToPay: result.totalToPay || 0,
         totalRaised: result.totalRaised || 0,
-        result
+        result,
+        polloResult: null
       }
     }
 
-    return { hasResult: false, number: '', name: '', hasWinners: false, totalToPay: 0, totalRaised: 0, result: null }
+    return { hasResult: false, number: '', name: '', hasWinners: false, totalToPay: 0, totalRaised: 0, result: null, polloResult: null }
   }
 
   const handleResultClick = async (result: DailyResult) => {
@@ -542,6 +640,8 @@ export function DrawsPage() {
             <p className="text-muted-foreground text-sm">
               {lotteryType === 'lola'
                 ? 'No hay sorteos activos de Lola para esta vista'
+                : lotteryType === 'pollo_lleno'
+                ? 'No hay sorteos activos de Pollo Lleno para esta vista'
                 : 'No hay sorteos activos de Mikaela para esta vista'}
             </p>
           </CardContent>
@@ -592,7 +692,7 @@ export function DrawsPage() {
                     </td>
                     {weekDays.map((day) => {
                       const dateStr = format(day, 'yyyy-MM-dd')
-                      const { hasResult, number, name, hasWinners, totalToPay, result } = getResultDisplay(lottery.id, day)
+                      const { hasResult, number, name, hasWinners, result, polloResult } = getResultDisplay(lottery.id, day)
                       const isTodayDate = isToday(day)
                       const isPast = isBefore(day, new Date()) && !isTodayDate
                       const isFuture = isBefore(new Date(), day) && !isTodayDate
@@ -614,6 +714,10 @@ export function DrawsPage() {
                                 if (isLolaLottery(lottery)) {
                                   const lolaResult = getResultForLotteryAndDateLola(lottery.id, dateStr)
                                   if (lolaResult) handleLolaResultClick(lolaResult)
+                                  return
+                                }
+                                if (isPolloLlenoLottery(lottery)) {
+                                  if (polloResult) handlePolloResultClick(polloResult)
                                   return
                                 }
                                 if (result) handleResultClick(result)
@@ -1441,6 +1545,257 @@ export function DrawsPage() {
               }}
             >
               {lolaSaving ? 'Guardando...' : 'Confirmar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de detalles del resultado (Pollo Lleno) */}
+      <Dialog
+        open={polloResultDetailOpen}
+        onOpenChange={(open) => {
+          setPolloResultDetailOpen(open)
+          if (!open) setSelectedPolloResultDetail(null)
+        }}
+      >
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Detalles del Resultado</DialogTitle>
+            <DialogDescription>Pollo Lleno</DialogDescription>
+          </DialogHeader>
+
+          {selectedPolloResultDetail && (
+            <div className="space-y-4">
+              <div className="bg-muted/50 rounded-lg p-4 text-center">
+                <p className="text-sm text-muted-foreground mb-2">
+                  {selectedPolloResultDetail.resultDate &&
+                    format(parseISO(selectedPolloResultDetail.resultDate), "EEEE d 'de' MMMM yyyy", { locale: es })}
+                </p>
+                <div className="text-lg font-semibold">Números seleccionados</div>
+                <div className="mt-2 flex flex-wrap justify-center gap-2">
+                  {selectedPolloResultDetail.numbers
+                    .slice()
+                    .sort((a, b) => a - b)
+                    .map((n) => (
+                      <span
+                        key={`pollo-detail-${n}`}
+                        className="px-2 py-1 rounded-md bg-white border text-sm font-medium"
+                      >
+                        {String(n).padStart(2, '0')}
+                      </span>
+                    ))}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-blue-700">
+                  <Trophy className="h-5 w-5 text-amber-500" weight="fill" />
+                  <span className="font-medium">Jugadas Ganadoras ({polloWinners.length})</span>
+                </div>
+
+                {polloLoadingWinners ? (
+                  <div className="flex items-center justify-center py-6">
+                    <SpinnerGap className="h-6 w-6 animate-spin text-blue-500" />
+                    <span className="ml-2 text-sm text-muted-foreground">Cargando ganadores...</span>
+                  </div>
+                ) : polloWinners.length > 0 ? (
+                  <ScrollArea className="h-[200px] rounded-lg border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-xs">Taquilla</TableHead>
+                          <TableHead className="text-xs text-right">Apostado</TableHead>
+                          <TableHead className="text-xs text-right">Premio</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {polloWinners.map((winner) => (
+                          <TableRow key={winner.id}>
+                            <TableCell className="py-2">
+                              <div className="flex items-center gap-2">
+                                <Storefront className="h-4 w-4 text-muted-foreground" />
+                                <span className="text-sm font-medium">{winner.taquillaName}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="py-2 text-right text-sm tabular-nums">
+                              {formatCurrency(winner.amount)}
+                            </TableCell>
+                            <TableCell className="py-2 text-right text-sm tabular-nums font-semibold text-emerald-600">
+                              {formatCurrency(winner.potentialWin)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </ScrollArea>
+                ) : (
+                  <div className="text-center py-4 text-sm text-muted-foreground">
+                    No se encontraron detalles de ganadores
+                  </div>
+                )}
+              </div>
+
+              <div className="text-xs text-muted-foreground text-center">
+                <p>
+                  Resultado registrado:{' '}
+                  {selectedPolloResultDetail.createdAt &&
+                    format(parseISO(selectedPolloResultDetail.createdAt), 'dd/MM/yyyy HH:mm', { locale: es })}
+                </p>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPolloResultDetailOpen(false)}>
+              Cerrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Pollo Lleno: cargar resultado */}
+      <Dialog
+        open={polloLoadDialogOpen}
+        onOpenChange={(open) => {
+          setPolloLoadDialogOpen(open)
+          if (!open) {
+            setSelectedPolloDate('')
+            setSelectedPolloNumbers([])
+            setPolloConfirmOpen(false)
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[650px]">
+          <DialogHeader>
+            <DialogTitle>Pollo Lleno — Selecciona 6 números</DialogTitle>
+            <DialogDescription>
+              {selectedPolloDate ? `Fecha: ${format(parseISO(selectedPolloDate), 'dd/MM/yyyy', { locale: es })}` : ''}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">
+              Seleccionados: {selectedPolloNumbers.length} / 6
+            </span>
+            {selectedPolloNumbers.length < 6 && (
+              <span className="text-xs text-muted-foreground">Selecciona exactamente 6 números.</span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-5 sm:grid-cols-8 gap-2">
+            {polloNumbers.map((num) => {
+              const isSelected = selectedPolloNumbers.includes(num)
+              const isDisabled = !isSelected && selectedPolloNumbers.length >= 6
+
+              return (
+                <button
+                  key={`pollo-${num}`}
+                  type="button"
+                  onClick={() => {
+                    setSelectedPolloNumbers((prev) => {
+                      if (prev.includes(num)) {
+                        return prev.filter((n) => n !== num)
+                      }
+                      if (prev.length >= 6) return prev
+                      return [...prev, num]
+                    })
+                  }}
+                  disabled={isDisabled}
+                  className={`h-10 rounded-md border text-sm font-medium transition-colors ${
+                    isSelected
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-white hover:bg-muted/50'
+                  } ${isDisabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+                >
+                  {num}
+                </button>
+              )
+            })}
+          </div>
+
+          <DialogFooter className="gap-3">
+            <Button variant="outline" onClick={() => setPolloLoadDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => {
+                if (selectedPolloNumbers.length !== 6) return
+                setPolloConfirmOpen(true)
+              }}
+              disabled={selectedPolloNumbers.length !== 6}
+            >
+              Cargar resultado
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirmación Pollo Lleno */}
+      <Dialog open={polloConfirmOpen} onOpenChange={setPolloConfirmOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Confirmar Resultado</DialogTitle>
+            <DialogDescription>
+              Esta acción no se puede deshacer
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="bg-muted/50 rounded-lg p-4 text-center mb-4">
+              <p className="text-sm text-muted-foreground mb-1">Pollo Lleno</p>
+              <p className="text-sm text-muted-foreground mb-2">
+                {selectedPolloDate
+                  ? format(parseISO(selectedPolloDate), "EEEE d 'de' MMMM", { locale: es })
+                  : ''}
+              </p>
+              <div className="flex flex-wrap justify-center gap-2">
+                {selectedPolloNumbers
+                  .slice()
+                  .sort()
+                  .map((num) => (
+                    <span
+                      key={`pollo-confirm-${num}`}
+                      className="px-2 py-1 rounded-md bg-white border text-sm font-medium"
+                    >
+                      {num}
+                    </span>
+                  ))}
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground text-center">
+              ¿Está seguro que desea cargar este resultado?
+            </p>
+          </div>
+          <DialogFooter className="gap-3">
+            <Button
+              variant="outline"
+              onClick={() => setPolloConfirmOpen(false)}
+              disabled={polloSaving}
+            >
+              Cancelar
+            </Button>
+            <Button
+              disabled={polloSaving}
+              onClick={async () => {
+                if (!selectedPolloDate || selectedPolloNumbers.length !== 6) return
+                setPolloSaving(true)
+                try {
+                  const numbers = selectedPolloNumbers.map((n) => Number.parseInt(n, 10))
+                  const ok = await createDailyResultPolloLleno(numbers, selectedPolloDate)
+                  if (ok) {
+                    toast.success('Resultado Pollo Lleno guardado exitosamente')
+                    setPolloConfirmOpen(false)
+                    setPolloLoadDialogOpen(false)
+                  } else {
+                    toast.error('Error al guardar el resultado (Pollo Lleno)')
+                  }
+                } catch (err) {
+                  toast.error('Error al guardar el resultado (Pollo Lleno)')
+                } finally {
+                  setPolloSaving(false)
+                }
+              }}
+            >
+              {polloSaving ? 'Guardando...' : 'Confirmar'}
             </Button>
           </DialogFooter>
         </DialogContent>
