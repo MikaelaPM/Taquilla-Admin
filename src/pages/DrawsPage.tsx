@@ -109,6 +109,7 @@ export function DrawsPage() {
   const [lolaLoadingWinners, setLolaLoadingWinners] = useState(false)
   const [polloWinners, setPolloWinners] = useState<WinnerItem[]>([])
   const [polloLoadingWinners, setPolloLoadingWinners] = useState(false)
+  const [polloWinnersByDate, setPolloWinnersByDate] = useState<Record<string, number>>({})
   const [lolaLoadDialogOpen, setLolaLoadDialogOpen] = useState(false)
   const [selectedLolaLottery, setSelectedLolaLottery] = useState<Lottery | null>(null)
   const [selectedLolaDate, setSelectedLolaDate] = useState<string>('')
@@ -180,6 +181,7 @@ export function DrawsPage() {
     setLolaLoadingWinners(false)
     setPolloWinners([])
     setPolloLoadingWinners(false)
+    setPolloWinnersByDate({})
 
     setLolaResultDetailOpen(false)
     setSelectedLolaResultDetail(null)
@@ -378,6 +380,43 @@ export function DrawsPage() {
 
   const weekEnd = endOfWeek(currentWeekStart, { weekStartsOn: 1 })
 
+  useEffect(() => {
+    let cancelled = false
+
+    const loadPolloWinnersByDate = async () => {
+      const entries = await Promise.all(
+        weekDays.map(async (day) => {
+          const dateStr = format(day, 'yyyy-MM-dd')
+          const polloResult = getResultForLotteryAndDatePolloLleno(dateStr)
+          if (!polloResult) return [dateStr, 0] as const
+
+          const winners = await getWinnersForResultPolloLleno(dateStr, polloResult.numbers)
+          return [dateStr, winners.length] as const
+        })
+      )
+
+      if (cancelled) return
+
+      const nextMap: Record<string, number> = {}
+      for (const [dateStr, count] of entries) {
+        nextMap[dateStr] = count
+      }
+
+      setPolloWinnersByDate(nextMap)
+    }
+
+    loadPolloWinnersByDate().catch((err) => {
+      console.error('Error loading Pollo Lleno winners by date:', err)
+      if (!cancelled) {
+        setPolloWinnersByDate({})
+      }
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [weekDays, getResultForLotteryAndDatePolloLleno, getWinnersForResultPolloLleno])
+
   // Verifica si la hora de juego de una lotería ya pasó para un día específico
   const hasDrawTimePassed = useCallback((lottery: Lottery, day: Date): boolean => {
     // Si no es hoy, la hora no aplica (días pasados siempre están disponibles, futuros nunca)
@@ -504,7 +543,7 @@ export function DrawsPage() {
           hasResult: true,
           number: numbersLabel,
           name: 'Pollo Lleno',
-          hasWinners: false,
+          hasWinners: (polloWinnersByDate[dateStr] || 0) > 0,
           totalToPay: 0,
           totalRaised: 0,
           result: null,
@@ -730,9 +769,13 @@ export function DrawsPage() {
                                   ? 'bg-gradient-to-br from-blue-500 to-blue-600 ring-2 ring-blue-300 ring-offset-1'
                                   : 'bg-emerald-100'
                               }`}>
-                                <span className={`text-lg font-bold ${hasWinners ? 'text-white' : 'text-emerald-700'}`}>
-                                  {number}
-                                </span>
+                                {isPolloLlenoLottery(lottery) ? (
+                                  <Target className={`h-5 w-5 ${hasWinners ? 'text-white' : 'text-emerald-700'}`} weight="fill" />
+                                ) : (
+                                  <span className={`text-lg font-bold ${hasWinners ? 'text-white' : 'text-emerald-700'}`}>
+                                    {number}
+                                  </span>
+                                )}
                                 {hasWinners && (
                                   <div className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-amber-400 flex items-center justify-center">
                                     <Trophy className="h-2.5 w-2.5 text-amber-900" weight="fill" />

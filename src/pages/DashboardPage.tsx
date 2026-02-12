@@ -3,10 +3,12 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useApp } from '@/contexts/AppContext'
 import { useLotteryTypePreference } from '@/contexts/LotteryTypeContext'
 import { useSalesStats } from '@/hooks/use-sales-stats'
 import { useSalesStatsLola } from '@/hooks/use-sales-stats-lola'
+import { useSalesStatsPolloLleno } from '@/hooks/use-sales-stats-pollo-lleno'
 import { useComercializadoraStats } from '@/hooks/use-comercializadora-stats'
 import { useAgencyStats } from '@/hooks/use-agency-stats'
 import { useTaquillaStats } from '@/hooks/use-taquilla-stats'
@@ -38,9 +40,11 @@ export function DashboardPage() {
     lotteries,
     dailyResults,
     dailyResultsLola,
+    dailyResultsPolloLleno,
     dailyResultsLoading,
     loadDailyResults,
     loadDailyResultsLola,
+    loadDailyResultsPolloLleno,
     winners,
     winnersLoading,
     loadWinners,
@@ -61,6 +65,12 @@ export function DashboardPage() {
   const todayStart = startOfDay(now)
   const weekStart = startOfWeek(now, { weekStartsOn: 1 })
   const monthStart = startOfMonth(now)
+
+  const getDateKey = (value: unknown): string => {
+    const s = String(value ?? '')
+    const m = s.match(/^(\d{4}-\d{2}-\d{2})/)
+    return m ? m[1] : ''
+  }
 
   // Estado del período seleccionado (para resaltar el botón activo)
   const [periodFilter, setPeriodFilter] = useState<'today' | 'week' | 'month' | 'custom'>('week')
@@ -88,7 +98,7 @@ export function DashboardPage() {
 
   const { stats: salesStats, loading: salesLoading, refresh: refreshSales } = useSalesStats({
     visibleTaquillaIds,
-    enabled: lotteryType !== 'lola'
+    enabled: lotteryType === 'mikaela'
   })
 
   const { stats: lolaSalesStats, loading: lolaSalesLoading, refresh: refreshLolaSales } = useSalesStatsLola({
@@ -96,6 +106,13 @@ export function DashboardPage() {
     dateFrom: appliedDateRange.from,
     dateTo: appliedDateRange.to,
     enabled: lotteryType === 'lola'
+  })
+
+  const { stats: polloSalesStats, loading: polloSalesLoading, refresh: refreshPolloSales } = useSalesStatsPolloLleno({
+    visibleTaquillaIds,
+    dateFrom: appliedDateRange.from,
+    dateTo: appliedDateRange.to,
+    enabled: lotteryType === 'pollo_lleno'
   })
 
   // Determinar tipo de usuario
@@ -111,7 +128,7 @@ export function DashboardPage() {
     taquillas: visibleTaquillas || [],
     dateFrom: appliedDateRange.from,
     dateTo: appliedDateRange.to,
-    enabled: lotteryType !== 'lola'
+    enabled: lotteryType === 'mikaela'
   })
 
   // Stats de agencias para la tabla (para comercializadoras)
@@ -120,7 +137,7 @@ export function DashboardPage() {
     taquillas: visibleTaquillas || [],
     dateFrom: appliedDateRange.from,
     dateTo: appliedDateRange.to,
-    enabled: lotteryType !== 'lola'
+    enabled: lotteryType === 'mikaela'
   })
 
   // Stats de taquillas para la tabla (para agencias)
@@ -128,7 +145,7 @@ export function DashboardPage() {
     taquillas: visibleTaquillas || [],
     dateFrom: appliedDateRange.from,
     dateTo: appliedDateRange.to,
-    enabled: lotteryType !== 'lola'
+    enabled: lotteryType === 'mikaela'
   })
 
   // Stats jerárquicos (para la tabla expandible)
@@ -142,7 +159,7 @@ export function DashboardPage() {
     allUsers,
     dateFrom: appliedDateRange.from,
     dateTo: appliedDateRange.to,
-    lotteryType: lotteryType === 'lola' ? 'lola' : 'mikaela',
+    lotteryType: lotteryType === 'lola' ? 'lola' : lotteryType === 'pollo_lleno' ? 'pollo_lleno' : 'mikaela',
     enabled: true
   })
 
@@ -170,6 +187,7 @@ export function DashboardPage() {
 
   // Ganadores filtrados por rango de fechas aplicado
   const filteredWinners = useMemo(() => {
+    if (lotteryType === 'pollo_lleno') return []
     const fromDate = startOfDay(appliedDateRange.from)
     const toDate = endOfDay(appliedDateRange.to)
     return winners.filter(w => {
@@ -375,6 +393,36 @@ export function DashboardPage() {
 
   // Estadísticas de resultados - usando datos según el perfil del usuario
   const periodStats = useMemo(() => {
+    if (lotteryType === 'pollo_lleno') {
+      const fromKey = format(startOfDay(appliedDateRange.from), 'yyyy-MM-dd')
+      const toKey = format(startOfDay(appliedDateRange.to), 'yyyy-MM-dd')
+
+      const filteredResults = dailyResultsPolloLleno.filter(r => {
+        const resultKey = getDateKey(r.resultDate)
+        return !!resultKey && resultKey >= fromKey && resultKey <= toKey
+      })
+
+      const resultsCount = filteredResults.length
+      const resultsWithWinners = filteredResults.filter(result => {
+        const dateKey = getDateKey(result.resultDate)
+        return (polloSalesStats.winnersByDate?.[dateKey] || 0) > 0
+      }).length
+
+      const totalSales = polloSalesStats.rangeSales
+      const totalPayout = polloSalesStats.rangePrizes
+      const totalCommissions = polloSalesStats.rangeTaquillaCommissions
+      const totalRaised = totalSales - totalPayout - totalCommissions
+
+      return {
+        totalSales,
+        totalPayout,
+        totalCommissions,
+        totalRaised,
+        resultsCount,
+        resultsWithWinners
+      }
+    }
+
     if (lotteryType === 'lola') {
       const fromDate = startOfDay(appliedDateRange.from)
       const toDate = endOfDay(appliedDateRange.to)
@@ -492,7 +540,7 @@ export function DashboardPage() {
       resultsCount,
       resultsWithWinners
     }
-  }, [dailyResults, dailyResultsLola, appliedDateRange, filteredWinners, salesStats, lolaSalesStats, comercializadoraStats, comercializadoraTotals, agencyStats, agencyTotals, taquillaStats, taquillaTotals, isAdmin, isComercializadora, isSubdistribuidor, isAgencia, periodType, currentUserCommissionPercent, lotteryType])
+  }, [dailyResults, dailyResultsLola, dailyResultsPolloLleno, appliedDateRange, filteredWinners, salesStats, lolaSalesStats, polloSalesStats, comercializadoraStats, comercializadoraTotals, agencyStats, agencyTotals, taquillaStats, taquillaTotals, isAdmin, isComercializadora, isSubdistribuidor, isAgencia, periodType, currentUserCommissionPercent, lotteryType])
 
   // Últimos resultados (para todos los usuarios)
   const latestClassicResults = useMemo(() => {
@@ -512,15 +560,39 @@ export function DashboardPage() {
       .slice(0, 5)
   }, [dailyResultsLola, lotteryType])
 
+  const latestPolloResults = useMemo(() => {
+    if (lotteryType !== 'pollo_lleno') return []
+
+    return [...dailyResultsPolloLleno]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 5)
+  }, [dailyResultsPolloLleno, lotteryType])
+
   // Loterías activas
   const activeLotteries = lotteries.filter(l => l.isActive)
 
+  const polloLlenoLottery = useMemo(() => ({
+    id: 'pollo-lleno',
+    name: 'Pollo Lleno',
+    openingTime: '00:00',
+    closingTime: '20:00',
+    drawTime: '20:00',
+    isActive: true,
+    playsTomorrow: false,
+    prizes: [],
+    createdAt: ''
+  }), [])
+
   const isLolaLottery = useCallback((lotteryId: string) => lotteryId.startsWith('lola-'), [])
   const activeLotteriesForType = useMemo(() => {
-    return activeLotteries.filter(l =>
-      lotteryType === 'lola' ? isLolaLottery(l.id) : !isLolaLottery(l.id)
-    )
-  }, [activeLotteries, lotteryType, isLolaLottery])
+    if (lotteryType === 'lola') {
+      return activeLotteries.filter(l => isLolaLottery(l.id))
+    }
+    if (lotteryType === 'pollo_lleno') {
+      return [polloLlenoLottery]
+    }
+    return activeLotteries.filter(l => !isLolaLottery(l.id))
+  }, [activeLotteries, lotteryType, isLolaLottery, polloLlenoLottery])
 
   // Taquillas activas (filtradas por visibilidad del usuario)
   const activeTaquillas = visibleTaquillas.filter(t => t.isApproved)
@@ -539,9 +611,11 @@ export function DashboardPage() {
   const handleRefreshAll = () => {
     loadDailyResults()
     loadDailyResultsLola()
+    loadDailyResultsPolloLleno()
     loadWinners()
     refreshSales()
     refreshLolaSales()
+    refreshPolloSales()
     refreshHierarchy()
     if (isAgencia) {
       refreshTaquillaStats()
@@ -618,9 +692,13 @@ export function DashboardPage() {
     setIsApplyingFilter(false)
   }, [pendingDateRange])
 
-  const isLoading = dailyResultsLoading || winnersLoading || salesLoading || lolaSalesLoading || comercializadoraStatsLoading || agencyStatsLoading || taquillaStatsLoading || hierarchyLoading || isApplyingFilter
+  const isLoading = dailyResultsLoading || winnersLoading || salesLoading || lolaSalesLoading || polloSalesLoading || comercializadoraStatsLoading || agencyStatsLoading || taquillaStatsLoading || hierarchyLoading || isApplyingFilter
 
-  const topTaquillas = lotteryType === 'lola' ? lolaSalesStats.salesByTaquilla : salesStats.salesByTaquilla
+  const topTaquillas = lotteryType === 'lola'
+    ? lolaSalesStats.salesByTaquilla
+    : lotteryType === 'pollo_lleno'
+    ? polloSalesStats.salesByTaquilla
+    : salesStats.salesByTaquilla
 
   // Validar si las fechas pendientes son válidas
   const isDateRangeValid = pendingDateRange.to >= pendingDateRange.from
@@ -774,7 +852,11 @@ export function DashboardPage() {
               </div>
             </div>
             <div className="mt-2 text-xs text-muted-foreground">
-              {lotteryType === 'lola' ? lolaSalesStats.winnersCount : filteredWinners.length} jugadas ganadoras
+              {lotteryType === 'lola'
+                ? lolaSalesStats.winnersCount
+                : lotteryType === 'pollo_lleno'
+                ? polloSalesStats.winnersCount
+                : filteredWinners.length} jugadas ganadoras
             </div>
           </CardContent>
         </Card>
@@ -903,14 +985,18 @@ export function DashboardPage() {
                 <Clock className="h-5 w-5 text-primary" />
                 <h3 className="font-semibold">Últimos Resultados</h3>
               </div>
-              {(lotteryType === 'lola' ? latestLolaResults : latestClassicResults).length === 0 ? (
+              {(lotteryType === 'lola'
+                ? latestLolaResults
+                : lotteryType === 'pollo_lleno'
+                ? latestPolloResults
+                : latestClassicResults).length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-8 text-center">
                   <Clock className="h-10 w-10 text-muted-foreground mb-2" />
                   <p className="text-sm text-muted-foreground">No hay resultados cargados</p>
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {lotteryType !== 'lola' && latestClassicResults.map((result) => (
+                  {lotteryType === 'mikaela' && latestClassicResults.map((result) => (
                     <div key={result.id} className="flex items-center gap-3 p-2 rounded-lg bg-muted/30">
                       <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center">
                         <span className="text-sm font-bold text-white">
@@ -971,6 +1057,50 @@ export function DashboardPage() {
                       </div>
                     </div>
                   ))}
+
+                  {lotteryType === 'pollo_lleno' && latestPolloResults.map((result) => {
+                    const numbersLabel = (result.numbers || [])
+                      .slice()
+                      .sort((a, b) => a - b)
+                      .map((n) => String(n).padStart(2, '0'))
+                      .join('-')
+                    const dateKey = getDateKey(result.resultDate)
+                    const hasWinners = (polloSalesStats.winnersByDate?.[dateKey] || 0) > 0
+
+                    return (
+                      <div key={result.id} className="flex items-center gap-3 p-2 rounded-lg bg-muted/30">
+                        <TooltipProvider delayDuration={150}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center">
+                                <Target className="h-5 w-5 text-white" weight="fill" />
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <span className="text-xs">{numbersLabel || 'Sin números'}</span>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">Pollo Lleno</p>
+                          <p className="text-xs text-muted-foreground">
+                            {dateKey ? format(parseISO(dateKey), "dd/MM/yyyy", { locale: es }) : 'Fecha no disponible'}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          {hasWinners ? (
+                            <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200">
+                              Con ganadores
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-[10px]">
+                              Sin ganadores
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               )}
             </CardContent>
@@ -1045,14 +1175,14 @@ export function DashboardPage() {
       </Card>
 
       {/* Loterías activas */}
-      {activeLotteries.length > 0 && (
+      {activeLotteriesForType.length > 0 && (
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-4">
               <Target className="h-5 w-5 text-primary" />
               <h3 className="font-semibold">Loterías Activas</h3>
               <Badge variant="outline" className="ml-auto text-[10px]">
-                {lotteryType === 'lola' ? 'Lola' : 'Mikaela'}
+                {lotteryType === 'lola' ? 'Lola' : lotteryType === 'pollo_lleno' ? 'Pollo Lleno' : 'Mikaela'}
               </Badge>
             </div>
 

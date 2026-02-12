@@ -26,13 +26,14 @@ interface UseHierarchicalStatsOptions {
   allUsers: any[]
   dateFrom: Date
   dateTo: Date
-  lotteryType?: 'lola' | 'mikaela'
+  lotteryType?: 'lola' | 'mikaela' | 'pollo_lleno'
   enabled?: boolean
 }
 
 export function useHierarchicalStats(options: UseHierarchicalStatsOptions) {
   const { currentUser, allUsers, dateFrom, dateTo, lotteryType, enabled = true } = options
   const isLola = lotteryType === 'lola'
+  const isPollo = lotteryType === 'pollo_lleno'
 
   const [rootEntities, setRootEntities] = useState<EntityStats[]>([])
   const [loading, setLoading] = useState(false)
@@ -215,6 +216,19 @@ export function useHierarchicalStats(options: UseHierarchicalStatsOptions) {
             const current = salesByTaquilla.get(item.user_id) || 0
             salesByTaquilla.set(item.user_id, current + Number(item.amount || 0))
           })
+        } else if (isPollo) {
+          const { data: salesData } = await supabase
+            .from('bets_item_pollo_lleno')
+            .select('user_id, amount, status')
+            .in('user_id', taquillaIds)
+            .gte('created_at', queryStart)
+            .lte('created_at', queryEnd)
+            .neq('status', 'cancelled')
+
+          ;(salesData || []).forEach(item => {
+            const current = salesByTaquilla.get(item.user_id) || 0
+            salesByTaquilla.set(item.user_id, current + Number(item.amount || 0))
+          })
         } else {
           const { data: salesData } = await supabase
             .from('bets_item_lottery_clasic')
@@ -237,6 +251,19 @@ export function useHierarchicalStats(options: UseHierarchicalStatsOptions) {
         if (isLola) {
           const { data: prizesData } = await supabase
             .from('bets_item_lola_lottery')
+            .select('user_id, prize, status')
+            .in('user_id', taquillaIds)
+            .in('status', ['winner', 'paid'])
+            .gte('created_at', queryStart)
+            .lte('created_at', queryEnd)
+
+          ;(prizesData || []).forEach(item => {
+            const current = prizesByTaquilla.get(item.user_id) || 0
+            prizesByTaquilla.set(item.user_id, current + Number(item.prize || 0))
+          })
+        } else if (isPollo) {
+          const { data: prizesData } = await supabase
+            .from('bets_item_pollo_lleno')
             .select('user_id, prize, status')
             .in('user_id', taquillaIds)
             .in('status', ['winner', 'paid'])
@@ -428,7 +455,7 @@ export function useHierarchicalStats(options: UseHierarchicalStatsOptions) {
     } finally {
       setLoading(false)
     }
-  }, [currentUser, allUsers, dateFrom, dateTo, rootType, enabled, isLola])
+  }, [currentUser, allUsers, dateFrom, dateTo, rootType, enabled, isLola, isPollo])
 
   // Cargar stats cuando cambien las dependencias
   useEffect(() => {

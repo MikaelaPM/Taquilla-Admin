@@ -88,6 +88,26 @@ export function useWinners(options?: UseWinnersOptions) {
 
       const { data: lolaWinnerItems, error: lolaFetchError } = await lolaQuery
 
+      // Consultar ganadores de Pollo Lleno
+      let polloQuery = supabase
+        .from('bets_item_pollo_lleno')
+        .select('id, bets_id, user_id, prize_id, amount, prize, status, created_at, numbers, key_gamble')
+        .eq('status', 'winner')
+        .order('created_at', { ascending: false })
+
+      if (startDate) {
+        polloQuery = polloQuery.gte('created_at', startDate)
+      }
+      if (endDate) {
+        polloQuery = polloQuery.lte('created_at', endDate)
+      }
+
+      if (visibleTaquillaIds && visibleTaquillaIds.length > 0) {
+        polloQuery = polloQuery.in('user_id', visibleTaquillaIds)
+      }
+
+      const { data: polloWinnerItems, error: polloFetchError } = await polloQuery
+
       if (fetchError) {
         console.error('Error fetching winners:', fetchError)
         setError(fetchError.message)
@@ -100,10 +120,17 @@ export function useWinners(options?: UseWinnersOptions) {
         return
       }
 
+      if (polloFetchError) {
+        console.error('Error fetching pollo winners:', polloFetchError)
+        setError(polloFetchError.message)
+        return
+      }
+
       const classicItems = winnerItems || []
       const lolaItems = lolaWinnerItems || []
+      const polloItems = polloWinnerItems || []
 
-      if (classicItems.length === 0 && lolaItems.length === 0) {
+      if (classicItems.length === 0 && lolaItems.length === 0 && polloItems.length === 0) {
         setWinners([])
         return
       }
@@ -111,7 +138,8 @@ export function useWinners(options?: UseWinnersOptions) {
       // Obtener IDs únicos de usuarios para buscar nombres de taquillas
       const userIds = [...new Set([
         ...classicItems.map(w => w.user_id),
-        ...lolaItems.map(w => w.user_id)
+        ...lolaItems.map(w => w.user_id),
+        ...polloItems.map(w => w.user_id)
       ].filter(Boolean))]
 
       // Obtener información de usuarios (taquillas)
@@ -235,7 +263,37 @@ export function useWinners(options?: UseWinnersOptions) {
         }
       })
 
-      const combined = [...mappedClassic, ...mappedLola]
+      const mappedPollo: Winner[] = polloItems.map((item: any) => {
+        const userInfo = usersMap.get(item.user_id) || { name: 'Desconocida', email: '' }
+        const numbers = Array.isArray(item.numbers) ? item.numbers : []
+        const numbersLabel = numbers
+          .map((n: any) => Number(n))
+          .filter((n: number) => Number.isFinite(n))
+          .sort((a: number, b: number) => a - b)
+          .map((n: number) => String(n).padStart(2, '0'))
+          .join('-')
+        const animalNumber = numbersLabel || String(item.key_gamble || '') || '??'
+
+        return {
+          id: item.id,
+          betsId: item.bets_id,
+          odile: item.user_id,
+          prizeId: item.prize_id || null,
+          amount: Number(item.amount) || 0,
+          potentialWin: Number(item.prize) || 0,
+          status: item.status,
+          createdAt: item.created_at,
+          taquillaId: item.user_id,
+          taquillaName: userInfo.name,
+          taquillaEmail: userInfo.email,
+          animalNumber,
+          animalName: 'Pollo Lleno',
+          lotteryId: 'pollo-lleno',
+          lotteryName: 'Pollo Lleno'
+        }
+      })
+
+      const combined = [...mappedClassic, ...mappedLola, ...mappedPollo]
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       setWinners(combined)
     } catch (err) {

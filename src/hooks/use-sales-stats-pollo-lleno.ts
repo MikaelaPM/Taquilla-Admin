@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { endOfDay, startOfDay } from 'date-fns'
+import { endOfDay, startOfDay, format } from 'date-fns'
 
 export interface PolloLlenoSalesStats {
   rangeSales: number
@@ -8,6 +8,7 @@ export interface PolloLlenoSalesStats {
   rangeTaquillaCommissions: number
   rangePrizes: number
   winnersCount: number
+  winnersByDate?: Record<string, number>
   salesByTaquilla: Array<{
     taquillaId: string
     taquillaName: string
@@ -33,6 +34,7 @@ const emptyStats: PolloLlenoSalesStats = {
   rangeTaquillaCommissions: 0,
   rangePrizes: 0,
   winnersCount: 0,
+  winnersByDate: {},
   salesByTaquilla: []
 }
 
@@ -40,6 +42,12 @@ export function useSalesStatsPolloLleno(options: UseSalesStatsPolloLlenoOptions)
   const [stats, setStats] = useState<PolloLlenoSalesStats>(emptyStats)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  const getDateKey = (value: unknown): string => {
+    const s = String(value ?? '')
+    const m = s.match(/^(\d{4}-\d{2}-\d{2})/)
+    return m ? m[1] : ''
+  }
 
   const loadStats = useCallback(async () => {
     const enabled = options.enabled ?? true
@@ -84,6 +92,7 @@ export function useSalesStatsPolloLleno(options: UseSalesStatsPolloLlenoOptions)
       }
 
       const taquillaMap = new Map<string, { sales: number; betsCount: number; winnersCount: number; prizes: number }>()
+      const winnersByDate: Record<string, number> = {}
       let totalSales = 0
       let totalBetsCount = 0
       let totalWinnersCount = 0
@@ -113,6 +122,11 @@ export function useSalesStatsPolloLleno(options: UseSalesStatsPolloLlenoOptions)
           current.prizes += prize
           totalWinnersCount += 1
           totalPrizes += prize
+
+          const dateKey = getDateKey(item.created_at)
+          if (dateKey) {
+            winnersByDate[dateKey] = (winnersByDate[dateKey] || 0) + 1
+          }
         }
 
         taquillaMap.set(taquillaId, current)
@@ -169,6 +183,7 @@ export function useSalesStatsPolloLleno(options: UseSalesStatsPolloLlenoOptions)
         rangeTaquillaCommissions,
         rangePrizes: totalPrizes,
         winnersCount: totalWinnersCount,
+        winnersByDate,
         salesByTaquilla
       })
     } catch (err) {

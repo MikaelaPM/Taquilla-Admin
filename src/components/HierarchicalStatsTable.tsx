@@ -41,7 +41,7 @@ interface HierarchicalStatsTableProps {
   allUsers: any[] // Todos los usuarios del sistema
   isLoading?: boolean
   currentUserType?: string // Tipo del usuario actual
-  lotteryType?: 'lola' | 'mikaela'
+  lotteryType?: 'lola' | 'mikaela' | 'pollo_lleno'
 }
 
 // Componente de fila expandible
@@ -52,7 +52,7 @@ interface ExpandableRowProps {
   dateTo: Date
   allUsers: any[]
   showProfitColumn: boolean
-  lotteryType?: 'lola' | 'mikaela'
+  lotteryType?: 'lola' | 'mikaela' | 'pollo_lleno'
 }
 
 function ExpandableRow({ entity, level, dateFrom, dateTo, allUsers, showProfitColumn, lotteryType }: ExpandableRowProps) {
@@ -60,6 +60,7 @@ function ExpandableRow({ entity, level, dateFrom, dateTo, allUsers, showProfitCo
   const [children, setChildren] = useState<EntityStats[]>([])
   const [isLoadingChildren, setIsLoadingChildren] = useState(false)
   const isLola = lotteryType === 'lola'
+  const isPollo = lotteryType === 'pollo_lleno'
 
   // Determinar el tipo de hijos según el tipo actual
   const getChildType = (parentType: string): 'comercializadora' | 'subdistribuidor' | 'agencia' | 'taquilla' | null => {
@@ -181,6 +182,19 @@ function ExpandableRow({ entity, level, dateFrom, dateTo, allUsers, showProfitCo
             const current = salesByUser.get(item.user_id) || 0
             salesByUser.set(item.user_id, current + Number(item.amount || 0))
           })
+        } else if (isPollo) {
+          const { data: salesData } = await supabase
+            .from('bets_item_pollo_lleno')
+            .select('user_id, amount, status')
+            .in('user_id', taquillaIds)
+            .gte('created_at', queryStart)
+            .lte('created_at', queryEnd)
+            .neq('status', 'cancelled')
+
+          ;(salesData || []).forEach(item => {
+            const current = salesByUser.get(item.user_id) || 0
+            salesByUser.set(item.user_id, current + Number(item.amount || 0))
+          })
         } else {
           const { data: salesData } = await supabase
             .from('bets_item_lottery_clasic')
@@ -203,6 +217,19 @@ function ExpandableRow({ entity, level, dateFrom, dateTo, allUsers, showProfitCo
         if (isLola) {
           const { data: prizesData } = await supabase
             .from('bets_item_lola_lottery')
+            .select('user_id, prize, status')
+            .in('user_id', taquillaIds)
+            .in('status', ['winner', 'paid'])
+            .gte('created_at', queryStart)
+            .lte('created_at', queryEnd)
+
+          ;(prizesData || []).forEach(item => {
+            const current = prizesByUser.get(item.user_id) || 0
+            prizesByUser.set(item.user_id, current + Number(item.prize || 0))
+          })
+        } else if (isPollo) {
+          const { data: prizesData } = await supabase
+            .from('bets_item_pollo_lleno')
             .select('user_id, prize, status')
             .in('user_id', taquillaIds)
             .in('status', ['winner', 'paid'])

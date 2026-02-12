@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Calendar } from '@/components/ui/calendar'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useApp } from '@/contexts/AppContext'
 import { useLotteryTypePreference } from '@/contexts/LotteryTypeContext'
 import { formatCurrency } from '@/lib/pot-utils'
@@ -38,10 +39,27 @@ export function WinnersPage() {
   const { lotteryType } = useLotteryTypePreference()
 
   const isLolaLotteryId = (lotteryId: string) => lotteryId.startsWith('lola-')
+  const polloLlenoLottery = useMemo(() => ({
+    id: 'pollo-lleno',
+    name: 'Pollo Lleno',
+    openingTime: '00:00',
+    closingTime: '20:00',
+    drawTime: '20:00',
+    isActive: true,
+    playsTomorrow: false,
+    prizes: [],
+    createdAt: ''
+  }), [])
   const activeLotteriesForType = useMemo(() => {
     const active = lotteries.filter(l => l.isActive)
-    return active.filter(l => (lotteryType === 'lola' ? isLolaLotteryId(l.id) : !isLolaLotteryId(l.id)))
-  }, [lotteries, lotteryType])
+    if (lotteryType === 'lola') {
+      return active.filter(l => isLolaLotteryId(l.id))
+    }
+    if (lotteryType === 'pollo_lleno') {
+      return [polloLlenoLottery]
+    }
+    return active.filter(l => !isLolaLotteryId(l.id))
+  }, [lotteries, lotteryType, polloLlenoLottery])
 
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'paid'>('all')
@@ -77,7 +95,9 @@ export function WinnersPage() {
       const winnerLotteryId = winner.lotteryId || ''
       const matchesType = lotteryType === 'lola'
         ? winnerLotteryId.startsWith('lola-')
-        : !winnerLotteryId.startsWith('lola-')
+        : lotteryType === 'pollo_lleno'
+        ? winnerLotteryId === 'pollo-lleno'
+        : !winnerLotteryId.startsWith('lola-') && winnerLotteryId !== 'pollo-lleno'
       if (!matchesType) return false
 
       // Búsqueda
@@ -428,7 +448,22 @@ export function WinnersPage() {
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex items-center gap-3">
                       <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center">
-                        <span className="text-base font-bold text-white">{winner.animalNumber}</span>
+                        {winner.lotteryId === 'pollo-lleno' ? (
+                          <TooltipProvider delayDuration={150}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="inline-flex items-center justify-center h-full w-full text-white">
+                                  <Target className="h-5 w-5" weight="fill" />
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <span className="text-sm font-medium">{winner.animalNumber}</span>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        ) : (
+                          <span className="text-base font-bold text-white">{winner.animalNumber}</span>
+                        )}
                       </div>
                       <div>
                         <h3 className="font-semibold text-sm leading-tight">
@@ -546,11 +581,12 @@ export function WinnersPage() {
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {Array.from(stats.porLoteria.entries()).map(([lotteryId, data]) => {
                 const lottery = lotteries.find(l => l.id === lotteryId)
+                const lotteryName = lotteryId === 'pollo-lleno' ? 'Pollo Lleno' : (lottery?.name || 'Desconocida')
                 return (
                   <div key={lotteryId} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                     <div className="flex items-center gap-2">
                       <Target className="h-4 w-4 text-primary" />
-                      <span className="text-sm font-medium">{lottery?.name || 'Desconocida'}</span>
+                      <span className="text-sm font-medium">{lotteryName}</span>
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-bold">{formatCurrency(data.total)}</p>

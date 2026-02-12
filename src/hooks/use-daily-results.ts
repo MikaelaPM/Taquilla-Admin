@@ -765,20 +765,10 @@ export function useDailyResults() {
       const dayStart = startOfDay(dateObj).toISOString()
       const dayEnd = endOfDay(dateObj).toISOString()
 
-      const keyGamble = (numbers || [])
-        .map((n) => Number(n))
-        .filter((n) => Number.isFinite(n))
-        .sort((a, b) => a - b)
-        .map((n) => String(n).padStart(2, '0'))
-        .join('')
-
-      if (!keyGamble) return []
-
       const { data: winningItems, error: itemsError } = await supabase
         .from('bets_item_pollo_lleno')
-        .select('id, user_id, amount, prize, created_at, status, key_gamble')
-        .eq('key_gamble', keyGamble)
-        .neq('status', 'cancelled')
+        .select('id, user_id, amount, prize, created_at, status')
+        .in('status', ['winner', 'paid'])
         .gte('created_at', dayStart)
         .lte('created_at', dayEnd)
 
