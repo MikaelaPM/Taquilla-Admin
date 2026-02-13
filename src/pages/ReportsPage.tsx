@@ -7,10 +7,12 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Progress } from '@/components/ui/progress'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useApp } from '@/contexts/AppContext'
 import { useLotteryTypePreference } from '@/contexts/LotteryTypeContext'
 import { useBetsStats } from '@/hooks/use-bets-stats'
 import { useSalesStatsLola } from '@/hooks/use-sales-stats-lola'
+import { useSalesStatsPolloLleno } from '@/hooks/use-sales-stats-pollo-lleno'
 import { useComercializadoraStats } from '@/hooks/use-comercializadora-stats'
 import { useAgencyStats } from '@/hooks/use-agency-stats'
 import { useTaquillaStats } from '@/hooks/use-taquilla-stats'
@@ -40,9 +42,11 @@ export function ReportsPage() {
   const {
     dailyResults,
     dailyResultsLola,
+    dailyResultsPolloLleno,
     dailyResultsLoading,
     loadDailyResults,
     loadDailyResultsLola,
+    loadDailyResultsPolloLleno,
     lotteries,
     winners,
     users,
@@ -58,10 +62,28 @@ export function ReportsPage() {
   const { topMostPlayed, topHighestAmount, loading: betsStatsLoading, loadBetsStats } = useBetsStats({ visibleTaquillaIds })
 
   const isLolaLotteryId = (lotteryId: string) => lotteryId.startsWith('lola-')
+  const polloLlenoLottery = useMemo(() => ({
+    id: 'pollo-lleno',
+    name: 'Pollo Lleno',
+    openingTime: '00:00',
+    closingTime: '20:00',
+    drawTime: '20:00',
+    isActive: true,
+    playsTomorrow: false,
+    prizes: [],
+    createdAt: ''
+  }), [])
+
   const activeLotteriesForType = useMemo(() => {
     const active = lotteries.filter(l => l.isActive)
-    return active.filter(l => (lotteryType === 'lola' ? isLolaLotteryId(l.id) : !isLolaLotteryId(l.id)))
-  }, [lotteries, lotteryType])
+    if (lotteryType === 'lola') {
+      return active.filter(l => isLolaLotteryId(l.id))
+    }
+    if (lotteryType === 'pollo_lleno') {
+      return [polloLlenoLottery]
+    }
+    return active.filter(l => !isLolaLotteryId(l.id))
+  }, [lotteries, lotteryType, polloLlenoLottery])
 
   // Determinar tipo de usuario
   const isAdmin = currentUser?.userType === 'admin' || !currentUser?.userType
@@ -113,6 +135,13 @@ export function ReportsPage() {
     enabled: lotteryType === 'lola'
   })
 
+  const { stats: polloSalesStats, refresh: refreshPolloSales } = useSalesStatsPolloLleno({
+    visibleTaquillaIds,
+    dateFrom: appliedDateRange.from,
+    dateTo: appliedDateRange.to,
+    enabled: lotteryType === 'pollo_lleno'
+  })
+
   const [periodFilter, setPeriodFilter] = useState<'today' | 'week' | 'month' | 'custom'>('month')
   const [selectedLottery, setSelectedLottery] = useState<string>('all')
 
@@ -129,6 +158,22 @@ export function ReportsPage() {
   const weekStart = startOfWeek(now, { weekStartsOn: 1 })
   const monthStart = startOfMonth(now)
 
+  const getDateKey = (value: unknown): string => {
+    const s = String(value ?? '')
+    const m = s.match(/^(\d{4}-\d{2}-\d{2})/)
+    return m ? m[1] : ''
+  }
+
+  const formatSequence = (value: unknown): string => {
+    const digits = String(value ?? '').replace(/\D+/g, '')
+    if (!digits) return ''
+    if (digits.length <= 2) return digits
+    if (digits.length % 2 === 0) {
+      return (digits.match(/.{1,2}/g) || []).join('-')
+    }
+    return digits
+  }
+
   // Estado de fechas - inicializado con "Este Mes"
   const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({
     from: monthStart,
@@ -137,37 +182,55 @@ export function ReportsPage() {
 
   // Filtrar resultados por período usando dateRange
   const filteredResults = useMemo(() => {
-    const list = lotteryType === 'lola' ? dailyResultsLola : dailyResults
+    const list = lotteryType === 'lola'
+      ? dailyResultsLola
+      : lotteryType === 'pollo_lleno'
+      ? dailyResultsPolloLleno
+      : dailyResults
     return list.filter(result => {
-      const resultDate = parseISO(result.resultDate)
+      const resultDateValue = (result as any).resultDate
+      const resultDate = lotteryType === 'pollo_lleno'
+        ? getDateKey(resultDateValue)
+        : parseISO(resultDateValue)
 
       // Filtro por tipo de lotería (Mikaela vs Lola)
       const matchesType = lotteryType === 'lola'
-        ? result.lotteryId.startsWith('lola-')
-        : !result.lotteryId.startsWith('lola-')
+        ? (result as any).lotteryId?.startsWith('lola-')
+        : lotteryType === 'pollo_lleno'
+        ? true
+        : !(result as any).lotteryId?.startsWith('lola-')
       if (!matchesType) return false
 
       // Filtro por lotería
-      if (selectedLottery !== 'all' && result.lotteryId !== selectedLottery) {
+      if (lotteryType === 'pollo_lleno') {
+        if (selectedLottery !== 'all' && selectedLottery !== 'pollo-lleno') return false
+      } else if (selectedLottery !== 'all' && (result as any).lotteryId !== selectedLottery) {
         return false
       }
 
       // Filtro por rango de fechas
       const fromDate = startOfDay(dateRange.from)
       const toDate = endOfDay(dateRange.to)
+      if (lotteryType === 'pollo_lleno') {
+        if (!resultDate) return false
+        const fromKey = format(fromDate, 'yyyy-MM-dd')
+        const toKey = format(toDate, 'yyyy-MM-dd')
+        return resultDate >= fromKey && resultDate <= toKey
+      }
       return resultDate >= fromDate && resultDate <= toDate
     })
-  }, [dailyResults, dailyResultsLola, selectedLottery, dateRange, lotteryType])
+  }, [dailyResults, dailyResultsLola, dailyResultsPolloLleno, selectedLottery, dateRange, lotteryType])
 
   // Filtrar ganadores por período usando dateRange
   const filteredWinners = useMemo(() => {
+    if (lotteryType === 'pollo_lleno') return []
     return winners.filter(winner => {
       const winnerDate = new Date(winner.createdAt)
 
       // Filtro por tipo de lotería (Mikaela vs Lola)
       const matchesType = lotteryType === 'lola'
         ? (winner.lotteryId || '').startsWith('lola-')
-        : !(winner.lotteryId || '').startsWith('lola-')
+        : !(winner.lotteryId || '').startsWith('lola-') && winner.lotteryId !== 'pollo-lleno'
       if (!matchesType) return false
 
       // Filtro por lotería
@@ -208,13 +271,21 @@ export function ReportsPage() {
     let totalCommissions = 0
     let totalBalance = 0
 
-    if (lotteryType === 'lola') {
+      if (lotteryType === 'lola') {
       totalSales = lolaSalesStats.rangeSales
       totalPrizes = filteredWinners.reduce((sum, w) => sum + w.potentialWin, 0)
       totalCommissions = lolaSalesStats.rangeTaquillaCommissions
       totalBalance = totalSales - totalPrizes - totalCommissions
       return { totalSales, totalPrizes, totalCommissions, totalBalance }
     }
+
+      if (lotteryType === 'pollo_lleno') {
+        totalSales = polloSalesStats.rangeSales
+        totalPrizes = polloSalesStats.rangePrizes
+        totalCommissions = polloSalesStats.rangeTaquillaCommissions
+        totalBalance = totalSales - totalPrizes - totalCommissions
+        return { totalSales, totalPrizes, totalCommissions, totalBalance }
+      }
 
     // Seleccionar el hook correcto según el tipo de usuario
     if (isAdmin && comercializadoraStats && comercializadoraStats.length > 0) {
@@ -316,17 +387,23 @@ export function ReportsPage() {
     }
 
     return { totalSales, totalPrizes, totalCommissions, totalBalance }
-  }, [lotteryType, lolaSalesStats, filteredWinners, isAdmin, isComercializadora, isSubdistribuidor, isAgencia, comercializadoraStats, agencyStats, taquillaStats, periodFilter, currentUser, comercializadoras, subdistribuidores, agencies])
+  }, [lotteryType, lolaSalesStats, polloSalesStats, filteredWinners, isAdmin, isComercializadora, isSubdistribuidor, isAgencia, comercializadoraStats, agencyStats, taquillaStats, periodFilter, currentUser, comercializadoras, subdistribuidores, agencies])
 
   // Estadísticas principales - usando datos filtrados por taquillas visibles
   const stats = useMemo(() => {
     const totalResults = filteredResults.length
 
     // Total de jugadas ganadoras (filtrado por taquillas visibles)
-    const totalWinningBets = filteredWinners.length
+    const totalWinningBets = lotteryType === 'pollo_lleno'
+      ? polloSalesStats.winnersCount
+      : filteredWinners.length
     // Total pagado en premios - usar filteredWinners que ya está filtrado por visibleTaquillaIds
-    const totalPayout = filteredWinners.reduce((sum, w) => sum + w.potentialWin, 0)
-    const totalBetAmount = filteredWinners.reduce((sum, w) => sum + w.amount, 0)
+    const totalPayout = lotteryType === 'pollo_lleno'
+      ? polloSalesStats.rangePrizes
+      : filteredWinners.reduce((sum, w) => sum + w.potentialWin, 0)
+    const totalBetAmount = lotteryType === 'pollo_lleno'
+      ? polloSalesStats.rangeSales
+      : filteredWinners.reduce((sum, w) => sum + w.amount, 0)
 
     // Usar los totales calculados desde los hooks de comercializadora/agencia/taquilla
     const periodSales = periodTotals.totalSales
@@ -347,10 +424,16 @@ export function ReportsPage() {
         })
     )
     // Contar cuántos resultados filtrados tienen ganadores de las taquillas visibles
-    const resultsWithWinners = filteredResults.filter(r => {
-      const resultDate = r.resultDate.split('T')[0]
-      return resultsWithWinnersSet.has(`${r.lotteryId}-${resultDate}`)
-    }).length
+    const resultsWithWinners = lotteryType === 'pollo_lleno'
+      ? filteredResults.filter(r => {
+          const dateKey = getDateKey((r as any).resultDate)
+          return !!dateKey && (polloSalesStats.winnersByDate?.[dateKey] || 0) > 0
+        }).length
+      : filteredResults.filter(r => {
+          const resultDate = (r as any).resultDate.split('T')[0]
+          const lotteryId = (r as any).lotteryId
+          return resultsWithWinnersSet.has(`${lotteryId}-${resultDate}`)
+        }).length
     const averagePayout = totalWinningBets > 0 ? totalPayout / totalWinningBets : 0
 
     return {
@@ -366,10 +449,18 @@ export function ReportsPage() {
       periodPrizes,
       periodCommissions
     }
-  }, [filteredResults, filteredWinners, periodTotals])
+  }, [filteredResults, filteredWinners, periodTotals, polloSalesStats, lotteryType])
 
   // Top loterías por premios pagados - usando filteredWinners (filtrado por taquillas visibles)
   const topLotteries = useMemo(() => {
+    if (lotteryType === 'pollo_lleno') {
+      if ((polloSalesStats.rangePrizes || 0) <= 0 && (polloSalesStats.winnersCount || 0) <= 0) return []
+      return [{
+        name: 'Pollo Lleno',
+        payout: polloSalesStats.rangePrizes || 0,
+        wins: polloSalesStats.winnersCount || 0
+      }]
+    }
     const lotteryStats = new Map<string, { name: string; payout: number; wins: number }>()
 
     filteredWinners.forEach((winner) => {
@@ -386,10 +477,35 @@ export function ReportsPage() {
     return Array.from(lotteryStats.values())
       .sort((a, b) => b.payout - a.payout)
       .slice(0, 5)
-  }, [filteredWinners])
+  }, [filteredWinners, polloSalesStats, lotteryType])
 
   // Top números ganadores - usando filteredWinners (filtrado por taquillas visibles)
   const topWinningNumbers = useMemo(() => {
+    if (lotteryType === 'pollo_lleno') {
+      const numberStats = new Map<string, { number: string; wins: number; totalPayout: number }>()
+      filteredResults.forEach((result: any) => {
+        const nums = Array.isArray(result.numbers) ? result.numbers : []
+        const sequence = nums
+          .slice()
+          .sort((a: number, b: number) => a - b)
+          .map((n: any) => String(n).padStart(2, '0'))
+          .join('-')
+        if (!sequence) return
+        const current = numberStats.get(sequence) || { number: sequence, wins: 0, totalPayout: 0 }
+        numberStats.set(sequence, { ...current, wins: current.wins + 1 })
+      })
+
+      const totalWins = Array.from(numberStats.values()).reduce((sum, item) => sum + item.wins, 0)
+      const totalPrizes = polloSalesStats.rangePrizes || 0
+      const normalized = Array.from(numberStats.values()).map((item) => ({
+        ...item,
+        totalPayout: totalWins > 0 ? (totalPrizes * (item.wins / totalWins)) : 0
+      }))
+
+      return normalized
+        .sort((a, b) => b.wins - a.wins)
+        .slice(0, 10)
+    }
     const numberStats = new Map<string, { number: string; wins: number; totalPayout: number }>()
 
     filteredWinners.forEach((winner) => {
@@ -409,10 +525,21 @@ export function ReportsPage() {
     return Array.from(numberStats.values())
       .sort((a, b) => b.wins - a.wins)
       .slice(0, 10)
-  }, [filteredWinners])
+  }, [filteredWinners, filteredResults, polloSalesStats, lotteryType])
 
   // Top taquillas por premios ganados
   const topTaquillas = useMemo(() => {
+    if (lotteryType === 'pollo_lleno') {
+      return polloSalesStats.salesByTaquilla
+        .map((t) => ({
+          name: t.taquillaName,
+          wins: t.winnersCount,
+          totalPayout: t.prizes,
+          totalBet: t.sales
+        }))
+        .sort((a, b) => b.totalPayout - a.totalPayout)
+        .slice(0, 10)
+    }
     const taquillaStats = new Map<string, { name: string; wins: number; totalPayout: number; totalBet: number }>()
 
     filteredWinners.forEach((winner) => {
@@ -433,7 +560,7 @@ export function ReportsPage() {
     return Array.from(taquillaStats.values())
       .sort((a, b) => b.totalPayout - a.totalPayout)
       .slice(0, 10)
-  }, [filteredWinners])
+  }, [filteredWinners, polloSalesStats, lotteryType])
 
   // Cargar estadísticas de apuestas cuando cambien los filtros
   useEffect(() => {
@@ -508,9 +635,12 @@ export function ReportsPage() {
   const handleRefresh = () => {
     loadDailyResults()
     loadDailyResultsLola()
+    loadDailyResultsPolloLleno()
     // Refrescar stats según el tipo de usuario
     if (lotteryType === 'lola') {
       refreshLolaSales()
+    } else if (lotteryType === 'pollo_lleno') {
+      refreshPolloSales()
     } else if (isAdmin) {
       refreshComercializadoraStats()
     } else if (isComercializadora) {
@@ -825,9 +955,24 @@ export function ReportsPage() {
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center">
-                              <span className="text-sm font-bold text-white">{item.number}</span>
-                            </div>
+                            {lotteryType === 'pollo_lleno' ? (
+                              <TooltipProvider delayDuration={150}>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center">
+                                      <Hash className="h-4 w-4 text-white" weight="bold" />
+                                    </div>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <span className="text-xs">{item.number}</span>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            ) : (
+                              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center">
+                                <span className="text-sm font-bold text-white">{item.number}</span>
+                              </div>
+                            )}
                           </div>
                         </TableCell>
                         <TableCell className="text-right font-semibold">
@@ -898,9 +1043,24 @@ export function ReportsPage() {
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
-                              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
-                                <span className="text-sm font-bold text-white">{item.number}</span>
-                              </div>
+                              {lotteryType === 'pollo_lleno' ? (
+                                <TooltipProvider delayDuration={150}>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
+                                        <Hash className="h-4 w-4 text-white" weight="bold" />
+                                      </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <span className="text-xs">{formatSequence(item.number)}</span>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              ) : (
+                                <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
+                                  <span className="text-sm font-bold text-white">{item.number}</span>
+                                </div>
+                              )}
                               <span className="text-xs text-muted-foreground">{item.animalName}</span>
                             </div>
                           </TableCell>
@@ -973,9 +1133,24 @@ export function ReportsPage() {
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
-                              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center">
-                                <span className="text-sm font-bold text-white">{item.number}</span>
-                              </div>
+                              {lotteryType === 'pollo_lleno' ? (
+                                <TooltipProvider delayDuration={150}>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center">
+                                        <Hash className="h-4 w-4 text-white" weight="bold" />
+                                      </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <span className="text-xs">{formatSequence(item.number)}</span>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              ) : (
+                                <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center">
+                                  <span className="text-sm font-bold text-white">{item.number}</span>
+                                </div>
+                              )}
                               <span className="text-xs text-muted-foreground">{item.animalName}</span>
                             </div>
                           </TableCell>

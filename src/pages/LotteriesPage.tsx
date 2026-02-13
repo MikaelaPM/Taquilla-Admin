@@ -134,10 +134,29 @@ export function LotteriesPage() {
   };
 
   const isLolaLottery = (lottery: Lottery) => lottery.id.startsWith("lola-");
+  const isPolloLlenoLottery = (lottery: Lottery) => lottery.id === "pollo-lleno";
 
-  const visibleLotteries = lotteries.filter((l) =>
-    lotteryType === "lola" ? isLolaLottery(l) : !isLolaLottery(l),
-  );
+  const polloLlenoLottery = useMemo<Lottery>(() => ({
+    id: "pollo-lleno",
+    name: "Pollo Lleno 8pm",
+    openingTime: "05:00",
+    closingTime: "19:55",
+    drawTime: "20:00",
+    isActive: true,
+    playsTomorrow: false,
+    prizes: [],
+    createdAt: "",
+  }), []);
+
+  const visibleLotteries = useMemo(() => {
+    if (lotteryType === "lola") {
+      return lotteries.filter((l) => isLolaLottery(l));
+    }
+    if (lotteryType === "pollo_lleno") {
+      return [polloLlenoLottery];
+    }
+    return lotteries.filter((l) => !isLolaLottery(l));
+  }, [lotteries, lotteryType, polloLlenoLottery]);
 
   // Filtrar y ordenar alfabéticamente por nombre
   const filteredLotteries = filterLotteries(visibleLotteries, search, {
@@ -291,6 +310,7 @@ export function LotteriesPage() {
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
           {filteredLotteries.map((lottery) => {
             const isLola = isLolaLottery(lottery);
+            const isPolloLleno = isPolloLlenoLottery(lottery);
             return (
               <Card
                 key={lottery.id}
@@ -374,7 +394,7 @@ export function LotteriesPage() {
                         </div>
                       </div>
                     </div>
-                    {!isLola && (
+                    {!isLola && !isPolloLleno && (
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
                         <button
                           className="h-7 w-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer"
