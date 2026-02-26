@@ -15,7 +15,7 @@ import { useTaquillaStats } from '@/hooks/use-taquilla-stats'
 import { useHierarchicalStats } from '@/hooks/use-hierarchical-stats'
 import { HierarchicalStatsTable } from '@/components/HierarchicalStatsTable'
 import { formatCurrency } from '@/lib/pot-utils'
-import { format, parseISO, startOfDay, endOfDay, startOfWeek, startOfMonth, isWithinInterval } from 'date-fns'
+import { format, parseISO, startOfDay, endOfDay, startOfWeek, startOfMonth, isWithinInterval, subDays } from 'date-fns'
 import { es } from 'date-fns/locale'
 import {
   CurrencyDollar,
@@ -32,7 +32,8 @@ import {
   CalendarBlank,
   Buildings,
   FunnelSimple,
-  TreeStructure
+  TreeStructure,
+  Ticket
 } from '@phosphor-icons/react'
 
 export function DashboardPage() {
@@ -73,7 +74,8 @@ export function DashboardPage() {
   }
 
   // Estado del período seleccionado (para resaltar el botón activo)
-  const [periodFilter, setPeriodFilter] = useState<'today' | 'week' | 'month' | 'custom'>('week')
+  const [periodFilter, setPeriodFilter] = useState<'today' | 'yesterday' | 'week' | 'month' | 'custom'>('week')
+  const yesterdayStart = startOfDay(subDays(now, 1))
 
   // Estado del rango de fechas pendientes (lo que el usuario está seleccionando)
   const [pendingDateRange, setPendingDateRange] = useState<{ from: Date; to: Date }>({
@@ -635,11 +637,13 @@ export function DashboardPage() {
   }
 
   // Handler para filtros rápidos - actualizan y aplican inmediatamente
-  const handlePeriodClick = (period: 'today' | 'week' | 'month') => {
+  const handlePeriodClick = (period: 'today' | 'yesterday' | 'week' | 'month') => {
     setPeriodFilter(period)
     let newRange: { from: Date; to: Date }
     if (period === 'today') {
       newRange = { from: todayStart, to: todayStart }
+    } else if (period === 'yesterday') {
+      newRange = { from: yesterdayStart, to: yesterdayStart }
     } else if (period === 'week') {
       newRange = { from: weekStart, to: todayStart }
     } else {
@@ -755,6 +759,14 @@ export function DashboardPage() {
                 Hoy
               </Button>
               <Button
+                variant={periodFilter === 'yesterday' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => handlePeriodClick('yesterday')}
+                disabled={isApplyingFilter}
+              >
+                Ayer
+              </Button>
+              <Button
                 variant={periodFilter === 'week' ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => handlePeriodClick('week')}
@@ -825,7 +837,17 @@ export function DashboardPage() {
       </Card>
 
       {/* Estadísticas principales */}
-      <div className={`grid gap-4 md:grid-cols-2 ${isAdmin ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
+      <div
+        className={`grid gap-4 md:grid-cols-2 ${
+          isAdmin
+            ? lotteryType === 'pollo_lleno'
+              ? 'lg:grid-cols-5'
+              : 'lg:grid-cols-4'
+            : lotteryType === 'pollo_lleno'
+              ? 'lg:grid-cols-4'
+              : 'lg:grid-cols-3'
+        }`}
+      >
         <Card className="border-l-4 border-l-blue-500">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
@@ -839,6 +861,22 @@ export function DashboardPage() {
             </div>
           </CardContent>
         </Card>
+
+        {lotteryType === 'pollo_lleno' && (
+          <Card className="border-l-4 border-l-indigo-500">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center">
+                  <Ticket className="h-5 w-5 text-white" weight="bold" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-indigo-600">{polloSalesStats.rangeBetsCount.toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">Tickets Vendidos</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Card className="border-l-4 border-l-red-500">
           <CardContent className="p-4">

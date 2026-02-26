@@ -17,8 +17,9 @@ import { useComercializadoraStats } from '@/hooks/use-comercializadora-stats'
 import { useAgencyStats } from '@/hooks/use-agency-stats'
 import { useTaquillaStats } from '@/hooks/use-taquilla-stats'
 import { formatCurrency } from '@/lib/pot-utils'
+import { supabase } from '@/lib/supabase'
 // Note: useSalesStats was removed as calculations are now done per comercializadora/agencia/taquilla
-import { format, startOfDay, endOfDay, startOfWeek, startOfMonth, parseISO } from 'date-fns'
+import { format, startOfDay, endOfDay, startOfWeek, startOfMonth, parseISO, subDays } from 'date-fns'
 import {
   ChartBar,
   Trophy,
@@ -35,7 +36,8 @@ import {
   Receipt,
   Hash,
   Money,
-  MagnifyingGlass
+  MagnifyingGlass,
+  Ticket
 } from '@phosphor-icons/react'
 
 export function ReportsPage() {
@@ -142,8 +144,19 @@ export function ReportsPage() {
     enabled: lotteryType === 'pollo_lleno'
   })
 
-  const [periodFilter, setPeriodFilter] = useState<'today' | 'week' | 'month' | 'custom'>('month')
+  const [periodFilter, setPeriodFilter] = useState<'today' | 'yesterday' | 'week' | 'month' | 'custom'>('month')
   const [selectedLottery, setSelectedLottery] = useState<string>('all')
+  const [polloTickets, setPolloTickets] = useState<Array<{
+    id: string
+    key_gamble: string | null
+    numbers: number[] | null
+    status: string | null
+    prize: string | number | null
+    description_prize: string | null
+    amount: string | number | null
+    created_at: string
+  }>>([])
+  const [polloTicketsLoading, setPolloTicketsLoading] = useState(false)
 
   // Si cambia el tipo (header), resetear la lotería seleccionada si no aplica
   useEffect(() => {
@@ -155,6 +168,7 @@ export function ReportsPage() {
   // Calcular fechas de filtros
   const now = new Date()
   const todayStart = startOfDay(now)
+  const yesterdayStart = startOfDay(subDays(now, 1))
   const weekStart = startOfWeek(now, { weekStartsOn: 1 })
   const monthStart = startOfMonth(now)
 
@@ -172,6 +186,17 @@ export function ReportsPage() {
       return (digits.match(/.{1,2}/g) || []).join('-')
     }
     return digits
+  }
+
+  const formatTicketNumbers = (numbers: number[] | null, keyGamble: string | null) => {
+    if (Array.isArray(numbers) && numbers.length > 0) {
+      return numbers
+        .slice()
+        .sort((a, b) => a - b)
+        .map((n) => String(n).padStart(2, '0'))
+        .join('-')
+    }
+    return formatSequence(keyGamble)
   }
 
   // Estado de fechas - inicializado con "Este Mes"
@@ -301,7 +326,7 @@ export function ReportsPage() {
           totalPrizes += stat.weekPrizes
           totalCommissions += stat.weekSalesCommission
           totalBalance += stat.weekBalance
-        } else if (periodFilter === 'custom') {
+        } else if (periodFilter === 'custom' || periodFilter === 'yesterday') {
           totalSales += stat.rangeSales
           totalPrizes += stat.rangePrizes
           totalCommissions += stat.rangeSalesCommission
@@ -340,7 +365,7 @@ export function ReportsPage() {
           totalSales += stat.weekSales
           totalPrizes += stat.weekPrizes
           totalBalance += stat.weekBalance
-        } else if (periodFilter === 'custom') {
+        } else if (periodFilter === 'custom' || periodFilter === 'yesterday') {
           totalSales += stat.rangeSales
           totalPrizes += stat.rangePrizes
           totalBalance += stat.rangeBalance
@@ -370,7 +395,7 @@ export function ReportsPage() {
           totalSales += stat.weekSales
           totalPrizes += stat.weekPrizes
           totalBalance += stat.weekBalance
-        } else if (periodFilter === 'custom') {
+        } else if (periodFilter === 'custom' || periodFilter === 'yesterday') {
           totalSales += stat.rangeSales
           totalPrizes += stat.rangePrizes
           totalBalance += stat.rangeBalance
@@ -573,9 +598,55 @@ export function ReportsPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateRange, selectedLottery, lotteryType])
 
+  useEffect(() => {
+    const loadTickets = async () => {
+      if (lotteryType !== 'pollo_lleno') {
+        setPolloTickets([])
+        return
+      }
+
+      setPolloTicketsLoading(true)
+
+      if (visibleTaquillaIds !== undefined && visibleTaquillaIds.length === 0) {
+        setPolloTickets([])
+        setPolloTicketsLoading(false)
+        return
+      }
+
+      const from = startOfDay(appliedDateRange.from).toISOString()
+      const to = endOfDay(appliedDateRange.to).toISOString()
+
+      let query = supabase
+        .from('bets_item_pollo_lleno')
+        .select('id, key_gamble, numbers, status, prize, description_prize, amount, created_at, user_id')
+        .gte('created_at', from)
+        .lte('created_at', to)
+        .order('created_at', { ascending: false })
+
+      if (visibleTaquillaIds && visibleTaquillaIds.length > 0) {
+        query = query.in('user_id', visibleTaquillaIds)
+      }
+
+      const { data, error } = await query
+
+      if (error) {
+        console.error('Error loading Pollo Lleno tickets:', error)
+        setPolloTickets([])
+        setPolloTicketsLoading(false)
+        return
+      }
+
+      setPolloTickets((data || []) as typeof polloTickets)
+      setPolloTicketsLoading(false)
+    }
+
+    loadTickets()
+  }, [appliedDateRange.from, appliedDateRange.to, lotteryType, visibleTaquillaIds])
+
   const getPeriodLabel = () => {
     switch (periodFilter) {
       case 'today': return 'Hoy'
+      case 'yesterday': return 'Ayer'
       case 'week': return 'Esta Semana'
       case 'month': return 'Este Mes'
       case 'custom': return 'Personalizado'
@@ -584,11 +655,13 @@ export function ReportsPage() {
   }
 
   // Handlers para filtros rápidos - actualizan dateRange y appliedDateRange
-  const handlePeriodClick = (period: 'today' | 'week' | 'month') => {
+  const handlePeriodClick = (period: 'today' | 'yesterday' | 'week' | 'month') => {
     setPeriodFilter(period)
     let newRange: { from: Date; to: Date }
     if (period === 'today') {
       newRange = { from: todayStart, to: todayStart }
+    } else if (period === 'yesterday') {
+      newRange = { from: yesterdayStart, to: yesterdayStart }
     } else if (period === 'week') {
       newRange = { from: weekStart, to: todayStart }
     } else {
@@ -710,6 +783,14 @@ export function ReportsPage() {
             Hoy
           </Button>
           <Button
+            variant={periodFilter === 'yesterday' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => handlePeriodClick('yesterday')}
+            className="cursor-pointer"
+          >
+            Ayer
+          </Button>
+          <Button
             variant={periodFilter === 'week' ? 'default' : 'outline'}
             size="sm"
             onClick={() => handlePeriodClick('week')}
@@ -765,7 +846,7 @@ export function ReportsPage() {
       </div>
 
       {/* Estadísticas principales */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className={`grid gap-4 md:grid-cols-2 ${lotteryType === 'pollo_lleno' ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}>
         <Card className="border-l-4 border-l-blue-500">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
@@ -779,6 +860,22 @@ export function ReportsPage() {
             </div>
           </CardContent>
         </Card>
+
+        {lotteryType === 'pollo_lleno' && (
+          <Card className="border-l-4 border-l-indigo-500">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center">
+                  <Ticket className="h-5 w-5 text-white" weight="bold" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-indigo-600">{polloSalesStats.rangeBetsCount.toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">Tickets Vendidos</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Card className="border-l-4 border-l-red-500">
           <CardContent className="p-4">
@@ -916,6 +1013,69 @@ export function ReportsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Tickets vendidos (Pollo Lleno) */}
+      {lotteryType === 'pollo_lleno' && (
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-4">
+              <Receipt className="h-5 w-5 text-primary" />
+              <h3 className="font-semibold">Tickets Vendidos</h3>
+              <Badge variant="outline" className="ml-auto">{getPeriodLabel()}</Badge>
+            </div>
+            {polloTicketsLoading ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <ArrowsClockwise className="h-10 w-10 text-muted-foreground mb-2 animate-spin" />
+                <p className="text-sm text-muted-foreground">Cargando tickets...</p>
+              </div>
+            ) : polloTickets.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <Receipt className="h-10 w-10 text-muted-foreground mb-2" />
+                <p className="text-sm text-muted-foreground">No hay tickets para el período seleccionado</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Combinación</TableHead>
+                      <TableHead>Estado</TableHead>
+                      <TableHead className="text-right">Premio</TableHead>
+                      <TableHead>Descripción</TableHead>
+                      <TableHead className="text-right">Monto</TableHead>
+                      <TableHead className="text-right">Fecha</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {polloTickets.map((ticket) => (
+                      <TableRow key={ticket.id}>
+                        <TableCell className="font-medium">
+                          {formatTicketNumbers(ticket.numbers, ticket.key_gamble)}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className="text-xs">
+                            {ticket.status || 'sin estado'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right font-semibold">
+                          {formatCurrency(Number(ticket.prize || 0))}
+                        </TableCell>
+                        <TableCell>{ticket.description_prize || '-'}</TableCell>
+                        <TableCell className="text-right">
+                          {formatCurrency(Number(ticket.amount || 0))}
+                        </TableCell>
+                        <TableCell className="text-right text-xs text-muted-foreground">
+                          {format(parseISO(ticket.created_at), 'dd/MM/yyyy HH:mm')}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Top Números Ganadores */}
       <Card>
