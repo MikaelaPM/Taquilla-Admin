@@ -120,7 +120,7 @@ export function LotteriesPage() {
   const [potSaving, setPotSaving] = useState(false);
   const [potError, setPotError] = useState<string | null>(null);
   const [potData, setPotData] = useState<PolloLlenoPot | null>(null);
-  const [potInitialInput, setPotInitialInput] = useState("");
+  const [potAmountInput, setPotAmountInput] = useState("");
 
   const parseMatrizItem = (raw: string) => {
     const cleaned = (raw || "").trim().replace(/^\(/, "").replace(/\)$/, "");
@@ -171,39 +171,61 @@ export function LotteriesPage() {
     if (error) {
       setPotError("No se pudo cargar el pote de Pollo Lleno");
       setPotData(null);
-      setPotInitialInput("");
+      setPotAmountInput("");
       setPotLoading(false);
       return;
     }
 
     const pot = (data || [])[0] ?? null;
     setPotData(pot);
-    setPotInitialInput(
-      pot?.inicial_pot !== null && pot?.inicial_pot !== undefined
-        ? String(pot.inicial_pot)
+    // initialize amount input from existing amount_pot
+    setPotAmountInput(
+      pot?.amount_pot !== null && pot?.amount_pot !== undefined
+        ? String(pot.amount_pot)
         : ""
     );
     setPotLoading(false);
   };
 
   const handleSavePot = async () => {
-    if (!potData) return;
-    const newValue = parseAmountNumber(potInitialInput);
+    const newValue = parseAmountNumber(potAmountInput);
+    if (newValue === 0) return;
     setPotSaving(true);
 
-    const { error } = await supabase
-      .from("pollo_lleno_pot")
-      .update({ inicial_pot: newValue })
-      .eq("id", potData.id);
+    if (potData) {
+      // editing existing pot
+      const { error } = await supabase
+        .from("pollo_lleno_pot")
+        .update({ amount_pot: newValue })
+        .eq("id", potData.id);
 
-    if (error) {
-      toast.error("No se pudo actualizar el pote inicial");
-      setPotSaving(false);
-      return;
+      if (error) {
+        toast.error("No se pudo actualizar el monto del pote");
+        setPotSaving(false);
+        return;
+      }
+
+      setPotData({ ...potData, amount_pot: newValue });
+      toast.success("Monto del pote actualizado");
+    } else {
+      // creating new pot entry for today
+      const { data, error } = await supabase
+        .from("pollo_lleno_pot")
+        .insert({ amount_pot: newValue })
+        .select()
+        .limit(1)
+        .single();
+
+      if (error || !data) {
+        toast.error("No se pudo crear el pote");
+        setPotSaving(false);
+        return;
+      }
+
+      setPotData(data as PolloLlenoPot);
+      toast.success("Pote creado exitosamente");
     }
 
-    setPotData({ ...potData, inicial_pot: newValue });
-    toast.success("Pote inicial actualizado");
     setPotSaving(false);
   };
 
@@ -738,7 +760,7 @@ export function LotteriesPage() {
           if (!open) {
             setPotData(null);
             setPotError(null);
-            setPotInitialInput("");
+            setPotAmountInput("");
           }
         }}
       >
@@ -756,44 +778,50 @@ export function LotteriesPage() {
             <div className="py-6 text-center text-sm text-destructive">
               {potError}
             </div>
-          ) : !potData ? (
-            <div className="py-6 text-center text-sm text-muted-foreground">
-              No hay pote registrado para el día de hoy.
-            </div>
           ) : (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-lg border bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground">Pote actual</p>
-                  <p className="text-lg font-semibold">
-                    {formatCurrency(Number(potData.amount_pot || 0))}
-                  </p>
+              {potData ? (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-lg border bg-muted/30 p-3">
+                      <p className="text-xs text-muted-foreground">Pote actual</p>
+                      <p className="text-lg font-semibold">
+                        {formatCurrency(Number(potData.amount_pot || 0))}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border bg-muted/30 p-3">
+                      <p className="text-xs text-muted-foreground">Pote administrador</p>
+                      <p className="text-lg font-semibold">
+                        {formatCurrency(Number(potData.admin_pot || 0))}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border bg-muted/30 p-3">
+                      <p className="text-xs text-muted-foreground">A pagar</p>
+                      <p className="text-lg font-semibold text-amber-600">
+                        {formatCurrency(Number(potData.amount_to_pay || 0))}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border bg-muted/30 p-3">
+                      <p className="text-xs text-muted-foreground">Pote inicial</p>
+                      <p className="text-lg font-semibold">
+                        {formatCurrency(Number(potData.inicial_pot || 0))}
+                      </p>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="py-6 text-center text-sm text-muted-foreground">
+                  No hay pote registrado para el día de hoy, puedes crearlo ingresando el monto.
                 </div>
-                <div className="rounded-lg border bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground">Pote administrador</p>
-                  <p className="text-lg font-semibold">
-                    {formatCurrency(Number(potData.admin_pot || 0))}
-                  </p>
-                </div>
-                <div className="rounded-lg border bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground">A pagar</p>
-                  <p className="text-lg font-semibold text-amber-600">
-                    {formatCurrency(Number(potData.amount_to_pay || 0))}
-                  </p>
-                </div>
-                <div className="rounded-lg border bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground">Pote inicial</p>
-                  <p className="text-lg font-semibold">
-                    {formatCurrency(Number(potData.inicial_pot || 0))}
-                  </p>
-                </div>
-              </div>
+              )}
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">Editar pote inicial</label>
+                <label className="text-sm font-medium">
+                  {potData ? "Editar monto del pote" : "Monto del pote"}
+                </label>
                 <Input
-                  value={potInitialInput}
-                  onChange={(e) => setPotInitialInput(e.target.value)}
+                  value={potAmountInput}
+                  onChange={(e) => setPotAmountInput(e.target.value)}
                   placeholder="0"
                   inputMode="decimal"
                 />
@@ -807,9 +835,15 @@ export function LotteriesPage() {
             </Button>
             <Button
               onClick={handleSavePot}
-              disabled={!potData || potLoading || potSaving}
+              disabled={potLoading || potSaving || potAmountInput.trim() === ""}
             >
-              {potSaving ? "Guardando..." : "Guardar"}
+              {potSaving
+                ? potData
+                  ? "Guardando..."
+                  : "Creando..."
+                : potData
+                ? "Guardar"
+                : "Crear"}
             </Button>
           </DialogFooter>
         </DialogContent>
