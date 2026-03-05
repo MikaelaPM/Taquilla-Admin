@@ -11,7 +11,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useApp } from '@/contexts/AppContext'
 import { useLotteryTypePreference } from '@/contexts/LotteryTypeContext'
 import { formatCurrency } from '@/lib/pot-utils'
-import { format, startOfDay, endOfDay, startOfWeek, startOfMonth } from 'date-fns'
+import { format, startOfDay, endOfDay, startOfWeek, startOfMonth, subDays } from 'date-fns'
 import { es } from 'date-fns/locale'
 import {
   MagnifyingGlass,
@@ -64,7 +64,7 @@ export function WinnersPage() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'paid'>('all')
   const [lotteryFilter, setLotteryFilter] = useState<string>('all')
-  const [periodFilter, setPeriodFilter] = useState<'today' | 'week' | 'month' | 'custom'>('today')
+  const [periodFilter, setPeriodFilter] = useState<'today' | 'yesterday' | 'week' | 'month' | 'custom'>('today')
   const [customDateRange, setCustomDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
     from: undefined,
     to: undefined
@@ -85,6 +85,7 @@ export function WinnersPage() {
   // Calcular fechas de filtros
   const now = new Date()
   const todayStart = startOfDay(now)
+  const yesterdayStart = startOfDay(subDays(now, 1))
   const weekStart = startOfWeek(now, { weekStartsOn: 1 })
   const monthStart = startOfMonth(now)
 
@@ -115,6 +116,8 @@ export function WinnersPage() {
       let matchesPeriod = true
       if (periodFilter === 'today') {
         matchesPeriod = winnerDate >= todayStart
+      } else if (periodFilter === 'yesterday') {
+        matchesPeriod = winnerDate >= yesterdayStart && winnerDate < todayStart
       } else if (periodFilter === 'week') {
         matchesPeriod = winnerDate >= weekStart
       } else if (periodFilter === 'month') {
@@ -192,6 +195,7 @@ export function WinnersPage() {
   const getPeriodLabel = () => {
     switch (periodFilter) {
       case 'today': return 'Hoy'
+      case 'yesterday': return 'Ayer'
       case 'week': return 'Esta Semana'
       case 'month': return 'Este Mes'
       case 'custom':
@@ -334,6 +338,14 @@ export function WinnersPage() {
             className="cursor-pointer"
           >
             Hoy
+          </Button>
+          <Button
+            variant={periodFilter === 'yesterday' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setPeriodFilter('yesterday')}
+            className="cursor-pointer"
+          >
+            Ayer
           </Button>
           <Button
             variant={periodFilter === 'week' ? 'default' : 'outline'}

@@ -15,8 +15,11 @@ import { LotteryDialog } from "@/components/LotteryDialog";
 import { useApp } from "@/contexts/AppContext";
 import { useLotteryTypePreference } from "@/contexts/LotteryTypeContext";
 import { filterLotteries } from "@/lib/filter-utils";
+import { formatCurrency } from "@/lib/pot-utils";
+import { supabase } from "@/lib/supabase";
 import { Lottery } from "@/lib/types";
 import { toast } from "sonner";
+import { endOfDay, startOfDay } from "date-fns";
 import {
   Plus,
   Calendar,
@@ -70,6 +73,15 @@ const parseAmountNumber = (raw: string) => {
   return Number.isFinite(n) ? n : 0;
 };
 
+type PolloLlenoPot = {
+  id: string;
+  created_at: string;
+  amount_pot: number | string | null;
+  inicial_pot: number | string | null;
+  admin_pot: number | string | null;
+  amount_to_pay: number | string | null;
+};
+
 const formatAmount = (n: number) =>
   new Intl.NumberFormat("es-ES", { maximumFractionDigits: 2 }).format(n);
 
@@ -103,6 +115,12 @@ export function LotteriesPage() {
   const [lolaMatrixDialogOpen, setLolaMatrixDialogOpen] = useState(false);
   const [selectedLolaLottery, setSelectedLolaLottery] =
     useState<Lottery | null>(null);
+  const [potDialogOpen, setPotDialogOpen] = useState(false);
+  const [potLoading, setPotLoading] = useState(false);
+  const [potSaving, setPotSaving] = useState(false);
+  const [potError, setPotError] = useState<string | null>(null);
+  const [potData, setPotData] = useState<PolloLlenoPot | null>(null);
+  const [potAmountInput, setPotAmountInput] = useState("");
 
   const parseMatrizItem = (raw: string) => {
     const cleaned = (raw || "").trim().replace(/^\(/, "").replace(/\)$/, "");
@@ -131,6 +149,84 @@ export function LotteriesPage() {
   const openLolaMatrix = (lottery: Lottery) => {
     setSelectedLolaLottery(lottery);
     setLolaMatrixDialogOpen(true);
+  };
+
+  const openPolloPot = async () => {
+    setPotDialogOpen(true);
+    setPotLoading(true);
+    setPotError(null);
+
+    const now = new Date();
+    const from = startOfDay(now).toISOString();
+    const to = endOfDay(now).toISOString();
+
+    const { data, error } = await supabase
+      .from("pollo_lleno_pot")
+      .select("id, created_at, amount_pot, inicial_pot, admin_pot, amount_to_pay")
+      .gte("created_at", from)
+      .lte("created_at", to)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (error) {
+      setPotError("No se pudo cargar el pote de Pollo Lleno");
+      setPotData(null);
+      setPotAmountInput("");
+      setPotLoading(false);
+      return;
+    }
+
+    const pot = (data || [])[0] ?? null;
+    setPotData(pot);
+    // initialize amount input from existing amount_pot
+    setPotAmountInput(
+      pot?.amount_pot !== null && pot?.amount_pot !== undefined
+        ? String(pot.amount_pot)
+        : ""
+    );
+    setPotLoading(false);
+  };
+
+  const handleSavePot = async () => {
+    const newValue = parseAmountNumber(potAmountInput);
+    if (newValue === 0) return;
+    setPotSaving(true);
+
+    if (potData) {
+      // editing existing pot
+      const { error } = await supabase
+        .from("pollo_lleno_pot")
+        .update({ amount_pot: newValue })
+        .eq("id", potData.id);
+
+      if (error) {
+        toast.error("No se pudo actualizar el monto del pote");
+        setPotSaving(false);
+        return;
+      }
+
+      setPotData({ ...potData, amount_pot: newValue });
+      toast.success("Monto del pote actualizado");
+    } else {
+      // creating new pot entry for today
+      const { data, error } = await supabase
+        .from("pollo_lleno_pot")
+        .insert({ amount_pot: newValue })
+        .select()
+        .limit(1)
+        .single();
+
+      if (error || !data) {
+        toast.error("No se pudo crear el pote");
+        setPotSaving(false);
+        return;
+      }
+
+      setPotData(data as PolloLlenoPot);
+      toast.success("Pote creado exitosamente");
+    }
+
+    setPotSaving(false);
   };
 
   const isLolaLottery = (lottery: Lottery) => lottery.id.startsWith("lola-");
@@ -315,22 +411,32 @@ export function LotteriesPage() {
               <Card
                 key={lottery.id}
                 className={`group relative overflow-hidden hover:shadow-lg transition-all duration-300 border-l-4 ${
-                  isLola ? "cursor-pointer" : ""
+                  isLola || isPolloLleno ? "cursor-pointer" : ""
                 }`}
                 style={{
                   borderLeftColor: lottery.isActive
                     ? "rgb(16 185 129)"
                     : "rgb(156 163 175)",
                 }}
-                onClick={isLola ? () => openLolaMatrix(lottery) : undefined}
-                role={isLola ? "button" : undefined}
-                tabIndex={isLola ? 0 : undefined}
-                onKeyDown={
+                onClick={
                   isLola
+                    ? () => openLolaMatrix(lottery)
+                    : isPolloLleno
+                      ? () => openPolloPot()
+                      : undefined
+                }
+                role={isLola || isPolloLleno ? "button" : undefined}
+                tabIndex={isLola || isPolloLleno ? 0 : undefined}
+                onKeyDown={
+                  isLola || isPolloLleno
                     ? (e) => {
                         if (e.key === "Enter" || e.key === " ") {
                           e.preventDefault();
-                          openLolaMatrix(lottery);
+                          if (isLola) {
+                            openLolaMatrix(lottery);
+                          } else if (isPolloLleno) {
+                            openPolloPot();
+                          }
                         }
                       }
                     : undefined
@@ -641,6 +747,103 @@ export function LotteriesPage() {
               onClick={() => setLolaMatrixDialogOpen(false)}
             >
               Cerrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Diálogo de pote para Pollo Lleno */}
+      <Dialog
+        open={potDialogOpen}
+        onOpenChange={(open) => {
+          setPotDialogOpen(open);
+          if (!open) {
+            setPotData(null);
+            setPotError(null);
+            setPotAmountInput("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle>Pote Pollo Lleno</DialogTitle>
+            <DialogDescription>Información del pote del día actual</DialogDescription>
+          </DialogHeader>
+
+          {potLoading ? (
+            <div className="py-6 text-center text-sm text-muted-foreground">
+              Cargando información del pote...
+            </div>
+          ) : potError ? (
+            <div className="py-6 text-center text-sm text-destructive">
+              {potError}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {potData ? (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-lg border bg-muted/30 p-3">
+                      <p className="text-xs text-muted-foreground">Pote actual</p>
+                      <p className="text-lg font-semibold">
+                        {formatCurrency(Number(potData.amount_pot || 0))}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border bg-muted/30 p-3">
+                      <p className="text-xs text-muted-foreground">Pote administrador</p>
+                      <p className="text-lg font-semibold">
+                        {formatCurrency(Number(potData.admin_pot || 0))}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border bg-muted/30 p-3">
+                      <p className="text-xs text-muted-foreground">A pagar</p>
+                      <p className="text-lg font-semibold text-amber-600">
+                        {formatCurrency(Number(potData.amount_to_pay || 0))}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border bg-muted/30 p-3">
+                      <p className="text-xs text-muted-foreground">Pote inicial</p>
+                      <p className="text-lg font-semibold">
+                        {formatCurrency(Number(potData.inicial_pot || 0))}
+                      </p>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="py-6 text-center text-sm text-muted-foreground">
+                  No hay pote registrado para el día de hoy, puedes crearlo ingresando el monto.
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">
+                  {potData ? "Editar monto del pote" : "Monto del pote"}
+                </label>
+                <Input
+                  value={potAmountInput}
+                  onChange={(e) => setPotAmountInput(e.target.value)}
+                  placeholder="0"
+                  inputMode="decimal"
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPotDialogOpen(false)}>
+              Cerrar
+            </Button>
+            <Button
+              onClick={handleSavePot}
+              disabled={potLoading || potSaving || potAmountInput.trim() === ""}
+            >
+              {potSaving
+                ? potData
+                  ? "Guardando..."
+                  : "Creando..."
+                : potData
+                ? "Guardar"
+                : "Crear"}
             </Button>
           </DialogFooter>
         </DialogContent>
